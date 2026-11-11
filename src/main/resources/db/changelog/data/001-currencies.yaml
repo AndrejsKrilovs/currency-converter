@@ -1,0 +1,189 @@
+databaseChangeLog:
+  - changeSet:
+      id: insert-currencies
+      author: andrejs.krilovs
+      changes:
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "AUD" }
+              - column: { name: name, value: "Australian Dollar" }
+              - column: { name: symbol, value: "A$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "BRL" }
+              - column: { name: name, value: "Brazilian Real" }
+              - column: { name: symbol, value: "R$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "CAD" }
+              - column: { name: name, value: "Canadian Dollar" }
+              - column: { name: symbol, value: "C$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "CHF" }
+              - column: { name: name, value: "Swiss Franc" }
+              - column: { name: symbol, value: "CHF" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "CNY" }
+              - column: { name: name, value: "Chinese Renminbi Yuan" }
+              - column: { name: symbol, value: "¥" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "CZK" }
+              - column: { name: name, value: "Czech Koruna" }
+              - column: { name: symbol, value: "Kč" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "DKK" }
+              - column: { name: name, value: "Danish Krone" }
+              - column: { name: symbol, value: "kr" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "EUR" }
+              - column: { name: name, value: "Euro" }
+              - column: { name: symbol, value: "€" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "GBP" }
+              - column: { name: name, value: "British Pound" }
+              - column: { name: symbol, value: "£" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "HKD" }
+              - column: { name: name, value: "Hong Kong Dollar" }
+              - column: { name: symbol, value: "HK$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "HUF" }
+              - column: { name: name, value: "Hungarian Forint" }
+              - column: { name: symbol, value: "Ft" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "IDR" }
+              - column: { name: name, value: "Indonesian Rupiah" }
+              - column: { name: symbol, value: "Rp" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "ILS" }
+              - column: { name: name, value: "Israeli New Shekel" }
+              - column: { name: symbol, value: "₪" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "INR" }
+              - column: { name: name, value: "Indian Rupee" }
+              - column: { name: symbol, value: "₹" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "ISK" }
+              - column: { name: name, value: "Icelandic Króna" }
+              - column: { name: symbol, value: "kr" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "JPY" }
+              - column: { name: name, value: "Japanese Yen" }
+              - column: { name: symbol, value: "¥" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "KRW" }
+              - column: { name: name, value: "South Korean Won" }
+              - column: { name: symbol, value: "₩" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "MXN" }
+              - column: { name: name, value: "Mexican Peso" }
+              - column: { name: symbol, value: "$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "MYR" }
+              - column: { name: name, value: "Malaysian Ringgit" }
+              - column: { name: symbol, value: "RM" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "NOK" }
+              - column: { name: name, value: "Norwegian Krone" }
+              - column: { name: symbol, value: "kr" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "NZD" }
+              - column: { name: name, value: "New Zealand Dollar" }
+              - column: { name: symbol, value: "NZ$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "PHP" }
+              - column: { name: name, value: "Philippine Peso" }
+              - column: { name: symbol, value: "₱" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "PLN" }
+              - column: { name: name, value: "Polish Złoty" }
+              - column: { name: symbol, value: "zł" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "RON" }
+              - column: { name: name, value: "Romanian Leu" }
+              - column: { name: symbol, value: "lei" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "SEK" }
+              - column: { name: name, value: "Swedish Krona" }
+              - column: { name: symbol, value: "kr" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "SGD" }
+              - column: { name: name, value: "Singapore Dollar" }
+              - column: { name: symbol, value: "S$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "THB" }
+              - column: { name: name, value: "Thai Baht" }
+              - column: { name: symbol, value: "฿" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "TRY" }
+              - column: { name: name, value: "Turkish Lira" }
+              - column: { name: symbol, value: "₺" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "USD" }
+              - column: { name: name, value: "United States Dollar" }
+              - column: { name: symbol, value: "$" }
+        - insert:
+            tableName: currency
+            columns:
+              - column: { name: code, value: "ZAR" }
+              - column: { name: name, value: "South African Rand" }
+              - column: { name: symbol, value: "R" }
+      rollback:
+        - delete:
+            tableName: currency
+            where: code in ('AUD','BRL','CAD','CHF','CNY','CZK','DKK','EUR','GBP','HKD','HUF','IDR','ILS','INR','ISK','JPY','KRW','MXN','MYR','NOK','NZD','PHP','PLN','RON','SEK','SGD','THB','TRY','USD','ZAR')

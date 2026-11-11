@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: payment-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-payment}
+      POSTGRES_USER: ${DB_USERNAME:-payment}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-payment}
+    ports:
+      - "5432:5432"
+    volumes:
+      # postgres 18+ keeps data in a versioned subdirectory of /var/lib/postgresql
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

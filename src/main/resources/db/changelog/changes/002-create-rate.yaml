@@ -1,0 +1,37 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-create-rate
+      author: andrejs.krilovs
+      changes:
+        - createTable:
+            tableName: rate
+            columns:
+              - column:
+                  name: base_currency
+                  type: varchar(4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_currency
+                  type: varchar(4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate
+                  type: numeric(19,6)
+        - addPrimaryKey:
+            tableName: rate
+            columnNames: base_currency, target_currency
+            constraintName: pk_rate
+        - addForeignKeyConstraint:
+            baseTableName: rate
+            baseColumnNames: base_currency
+            constraintName: fk_rate_base_currency
+            referencedTableName: currency
+            referencedColumnNames: code
+        - addForeignKeyConstraint:
+            baseTableName: rate
+            baseColumnNames: target_currency
+            constraintName: fk_rate_target_currency
+            referencedTableName: currency
+            referencedColumnNames: code

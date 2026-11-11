@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-create-currency.yaml
+  - include:
+      file: db/changelog/changes/002-create-rate.yaml
+  - include:
+      file: db/changelog/data/001-currencies.yaml
+  - include:
+      file: db/changelog/data/002-rates.yaml

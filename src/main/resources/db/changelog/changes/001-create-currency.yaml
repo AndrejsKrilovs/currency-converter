@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-currency
+      author: andrejs.krilovs
+      changes:
+        - createTable:
+            tableName: currency
+            columns:
+              - column:
+                  name: code
+                  type: varchar(4)
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_currency
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: symbol
+                  type: varchar(3)

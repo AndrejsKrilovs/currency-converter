@@ -1,0 +1,30 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{dd.MM.yyyy HH:mm:ss} %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- wide events as bare pretty-printed JSON, rolled daily -->
+    <appender name="WIDE_EVENTS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/wide-events.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="WARN">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+    <!-- application lifecycle -->
+    <logger name="krilovs.andrejs" level="INFO"/>
+
+    <!-- file-only logger used by WideEvent -->
+    <logger name="wide-event.file" level="INFO" additivity="false">
+        <appender-ref ref="WIDE_EVENTS_FILE"/>
+    </logger>
+</configuration>

@@ -1,0 +1,184 @@
+databaseChangeLog:
+  - changeSet:
+      id: insert-eur-rates
+      author: andrejs.krilovs
+      comment: ECB rates from api.frankfurter.app/latest, base EUR, date 2026-11-05
+      changes:
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "AUD" }
+              - column: { name: rate, valueNumeric: 1.6033 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "BRL" }
+              - column: { name: rate, valueNumeric: 6.1355 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "CAD" }
+              - column: { name: rate, valueNumeric: 1.5675 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "CHF" }
+              - column: { name: rate, valueNumeric: 0.918 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "CNY" }
+              - column: { name: rate, valueNumeric: 7.4846 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "CZK" }
+              - column: { name: rate, valueNumeric: 24.289 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "DKK" }
+              - column: { name: rate, valueNumeric: 7.4747 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "GBP" }
+              - column: { name: rate, valueNumeric: 0.83393 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "HKD" }
+              - column: { name: rate, valueNumeric: 8.8055 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "HUF" }
+              - column: { name: rate, valueNumeric: 363.18 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "IDR" }
+              - column: { name: rate, valueNumeric: 20281.15 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "ILS" }
+              - column: { name: rate, valueNumeric: 3.5598 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "INR" }
+              - column: { name: rate, valueNumeric: 106.0395 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "ISK" }
+              - column: { name: rate, valueNumeric: 136.8 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "JPY" }
+              - column: { name: rate, valueNumeric: 177.85 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "KRW" }
+              - column: { name: rate, valueNumeric: 1509.28 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "MXN" }
+              - column: { name: rate, valueNumeric: 20.8655 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "MYR" }
+              - column: { name: rate, valueNumeric: 4.5412 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "NOK" }
+              - column: { name: rate, valueNumeric: 10.4365 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "NZD" }
+              - column: { name: rate, valueNumeric: 1.9966 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "PHP" }
+              - column: { name: rate, valueNumeric: 70.706 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "PLN" }
+              - column: { name: rate, valueNumeric: 4.389 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "RON" }
+              - column: { name: rate, valueNumeric: 5.3385 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "SEK" }
+              - column: { name: rate, valueNumeric: 10.9845 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "SGD" }
+              - column: { name: rate, valueNumeric: 1.4336 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "THB" }
+              - column: { name: rate, valueNumeric: 37.533 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "TRY" }
+              - column: { name: rate, valueNumeric: 56.1729 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "USD" }
+              - column: { name: rate, valueNumeric: 1.1224 }
+        - insert:
+            tableName: rate
+            columns:
+              - column: { name: base_currency, value: "EUR" }
+              - column: { name: target_currency, value: "ZAR" }
+              - column: { name: rate, valueNumeric: 18.4268 }
+      rollback:
+        - delete:
+            tableName: rate
+            where: base_currency = 'EUR'

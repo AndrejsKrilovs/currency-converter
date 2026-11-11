@@ -1,0 +1,8 @@
+database:
+  config_name: playground
+  jdbc_string: jdbc:postgresql://localhost:5432/payment
+  user: payment
+  password: payment
+  max_connection_pool_size: 10
+liquibase:
+  changelog: db/changelog/db.changelog-master.yaml
