@@ -1,16 +1,12 @@
 package krilovs.andrejs.app.exchange;
 
+import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletResponse;
-import krilovs.andrejs.app.util.AbstractTestClass;
-import krilovs.andrejs.app.util.HttpTestServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import krilovs.andrejs.app.util.AbstractServletTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 
@@ -18,21 +14,18 @@ import static krilovs.andrejs.app.util.HttpTestServer.json;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-class ExchangeServletTest extends AbstractTestClass {
+class ExchangeServletTest extends AbstractServletTest {
     @Mock
     private ExchangeService exchangeService;
 
-    private HttpTestServer server;
-
-    @BeforeEach
-    void startServer() {
-        server = new HttpTestServer(new ExchangeServlet(exchangeService), "/exchange", "/other");
+    @Override
+    protected HttpServlet servlet() {
+        return new ExchangeServlet(exchangeService);
     }
 
-    @AfterEach
-    void stopServer() {
-        server.close();
+    @Override
+    protected String[] paths() {
+        return new String[]{"/exchange", "/other"};
     }
 
     @Test
@@ -54,33 +47,34 @@ class ExchangeServletTest extends AbstractTestClass {
 
     @Test
     void shouldNotConvertSameCurrencies() {
-        var response = server.get("/exchange?from=eur&to=eur&amount=1");
-        assertEquals(HttpServletResponse.SC_BAD_REQUEST, response.statusCode());
-        assertEquals(
-                "Base currency must differ from target currency",
-                json(response).get("errors").get("currenciesDifferent").get(0).asText()
+        assertValidationError(
+                server.get("/exchange?from=eur&to=eur&amount=1"),
+                "currenciesDifferent",
+                "Base currency must differ from target currency"
         );
     }
 
     @Test
     void shouldNotConvertWhenIncorrectAmount() {
-        var response = server.get("/exchange?from=eur&to=usd&amount=aaa");
-        assertEquals(HttpServletResponse.SC_BAD_REQUEST, response.statusCode());
-        assertEquals("Amount must be a number", json(response).get("error").asText());
+        assertError(
+                server.get("/exchange?from=eur&to=usd&amount=aaa"),
+                HttpServletResponse.SC_BAD_REQUEST,
+                "Amount must be a number"
+        );
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"to=eur&amount=1", "from=&to=eur&amount=1", "from=%20&to=eur&amount=1"})
     void shouldNotConvertWhenParameterIsMissingOrBlank(String query) {
-        var response = server.get("/exchange?" + query);
-        assertEquals(HttpServletResponse.SC_BAD_REQUEST, response.statusCode());
-        assertEquals("Missing query parameter: from", json(response).get("error").asText());
+        assertError(
+                server.get("/exchange?" + query),
+                HttpServletResponse.SC_BAD_REQUEST,
+                "Missing query parameter: from"
+        );
     }
 
     @Test
     void shouldReturnIncorrectEndpointWhenPathIsUnsupported() {
-        var response = server.get("/other");
-        assertEquals(HttpServletResponse.SC_NOT_FOUND, response.statusCode());
-        assertEquals("Incorrect endpoint", json(response).get("error").asText());
+        assertIncorrectEndpoint("GET", null);
     }
 }

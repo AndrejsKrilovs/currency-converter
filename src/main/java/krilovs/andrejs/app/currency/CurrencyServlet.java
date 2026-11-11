@@ -29,7 +29,7 @@ public class CurrencyServlet extends AbstractServlet {
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         if ("/currencies".equals(req.getServletPath())) {
-            var currency = currencyService.persist(body(req, Currency.class));
+            var currency = currencyService.persist(body(req, CurrencyRequest.class));
             respond(resp, HttpServletResponse.SC_CREATED, currency);
             return;
         }

@@ -19,6 +19,7 @@ val jettyVersion = "12.1.14"
 val jacksonVersion = "2.22.4"
 val jerseyVersion = "4.0.3"
 val agroalVersion = "3.2.1"
+val mapstructVersion = "1.6.3"
 val lombokVersion = "1.18.48"
 val lombokString = "org.projectlombok:lombok:$lombokVersion"
 val mockitoVersion = "5.24.0"
@@ -58,6 +59,9 @@ dependencies {
   testCompileOnly(lombokString)
   annotationProcessor(lombokString)
   testAnnotationProcessor(lombokString)
+  annotationProcessor("org.mapstruct:mapstruct-processor:$mapstructVersion")
+  annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
+  implementation("org.mapstruct:mapstruct:${mapstructVersion}")
 
   implementation("ch.qos.logback:logback-classic:1.6.5")
 

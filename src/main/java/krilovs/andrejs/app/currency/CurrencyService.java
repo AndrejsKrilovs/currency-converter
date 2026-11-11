@@ -8,23 +8,28 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 public class CurrencyService {
+    private final static CurrencyMapper MAPPER = CurrencyMapper.INSTANCE;
     private final PersistenceConfig persistence;
 
-    public List<Currency> findAll() {
+    public List<CurrencyResponse> findAll() {
         return persistence.withEntityManager(em ->
-                em.createQuery("SELECT c FROM Currency c ORDER BY c.code", Currency.class).getResultList()
+                em.createQuery("SELECT c FROM Currency c ORDER BY c.code", Currency.class).getResultList().stream()
+                        .map(MAPPER::toCurrencyResponse)
+                        .toList()
         );
     }
 
-    public Optional<Currency> findById(String code) {
-        return Optional.ofNullable(persistence.withEntityManager(em -> em.find(Currency.class, code)));
+    public Optional<CurrencyResponse> findById(String code) {
+        return Optional.ofNullable(persistence.withEntityManager(em -> em.find(Currency.class, code)))
+                .map(MAPPER::toCurrencyResponse);
     }
 
-    public Currency persist(Currency currency) {
+    public CurrencyResponse persist(CurrencyRequest request) {
         return persistence.inTransaction(em -> {
+            var currency = MAPPER.toCurrency(request);
             em.persist(currency);
             em.flush();
-            return currency;
+            return MAPPER.toCurrencyResponse(currency);
         });
     }
 }

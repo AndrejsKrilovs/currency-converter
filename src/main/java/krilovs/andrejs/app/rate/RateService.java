@@ -15,19 +15,23 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class RateService {
     private final static String PIVOT_CURRENCY = "EUR";
+    private final static RateMapper MAPPER = RateMapper.INSTANCE;
     private final PersistenceConfig persistence;
 
-    public List<Rate> findAll() {
+    public List<RateResponse> findAll() {
         var sql = "SELECT r FROM Rate r";
-        return persistence.withEntityManager(em ->
-                em.createQuery(sql, Rate.class)
-                        .setHint(QueryHints.LEFT_FETCH, "r.baseCurrency")
-                        .setHint(QueryHints.LEFT_FETCH, "r.targetCurrency")
-                        .getResultList()
-        );
+        return persistence.withEntityManager(em -> {
+            var queryResult = em.createQuery(sql, Rate.class)
+                    .setHint(QueryHints.LEFT_FETCH, "r.baseCurrency")
+                    .setHint(QueryHints.LEFT_FETCH, "r.targetCurrency")
+                    .getResultList();
+            return queryResult.stream()
+                    .map(MAPPER::toRateResponse)
+                    .toList();
+        });
     }
 
-    public Optional<Rate> findByPair(String base, String target) {
+    public Optional<RateResponse> findByPair(String base, String target) {
         var from = base.toUpperCase();
         var to = target.toUpperCase();
         var sql = """
@@ -46,23 +50,25 @@ public class RateService {
                         .setParameter("pivot", PIVOT_CURRENCY)
                         .getResultList()
         );
-        return pickCorrectRate(rates, from, to).filter(RateService::hasValue)
+        var currentRate = pickCorrectRate(rates, from, to).filter(RateService::hasValue)
                 .or(() -> pickCorrectRate(rates, to, from).flatMap(this::invertRate))
                 .or(() -> crossViaPivot(rates, from, to));
+        return currentRate.map(MAPPER::toRateResponse);
     }
 
-    public Rate persist(RateRequest request) {
+    public RateResponse persist(RateRequest request) {
         var sql = """
             INSERT INTO rate (base_currency, target_currency, rate)
             VALUES (?1, ?2, ?3)
             RETURNING base_currency, target_currency, rate""";
         return persistence.inTransaction(em -> {
             try {
-                return (Rate) em.createNativeQuery(sql, Rate.class)
+                var insertedItem = (Rate) em.createNativeQuery(sql, Rate.class)
                         .setParameter(1, request.baseCurrencyCode().toUpperCase())
                         .setParameter(2, request.targetCurrencyCode().toUpperCase())
                         .setParameter(3, request.rate())
                         .getSingleResult();
+                return MAPPER.toRateResponse(insertedItem);
             }
             catch (PersistenceException e) {
                 // FK violation: one of the currencies does not exist in the currency table
@@ -74,7 +80,7 @@ public class RateService {
         });
     }
 
-    public Rate update(RateRequest request) {
+    public RateResponse update(RateRequest request) {
         var base = request.baseCurrencyCode().toUpperCase();
         var target = request.targetCurrencyCode().toUpperCase();
         var sql = """
@@ -91,7 +97,7 @@ public class RateService {
         if (rate == null) {
             throw new NoEntityException("Exchange rate not found", base + target);
         }
-        return rate;
+        return MAPPER.toRateResponse(rate);
     }
 
     private static Optional<Rate> pickCorrectRate(List<Rate> rates, String base, String target) {

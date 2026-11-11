@@ -13,18 +13,18 @@ public class ExchangeService {
 
     public ExchangeResponse convert(ExchangeRequest request) {
         var rate = rateService.findByPair(request.baseCurrencyCode(), request.targetCurrencyCode())
-                .filter(found -> found.getRate() != null)
+                .filter(found -> found.rate() != null)
                 .orElseThrow(() -> new NoEntityException(
                         "Exchange pair not found",
                         List.of(request.baseCurrencyCode(), request.targetCurrencyCode())
                 ));
 
         return new ExchangeResponse(
-                rate.getBaseCurrency(),
-                rate.getTargetCurrency(),
-                rate.getRate().stripTrailingZeros(),
+                rate.baseCurrency(),
+                rate.targetCurrency(),
+                rate.rate().stripTrailingZeros(),
                 request.amount().setScale(2, RoundingMode.HALF_UP),
-                rate.getRate().multiply(request.amount()).setScale(2, RoundingMode.HALF_UP)
+                rate.rate().multiply(request.amount()).setScale(2, RoundingMode.HALF_UP)
         );
     }
 }
