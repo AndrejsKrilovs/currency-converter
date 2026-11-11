@@ -4,53 +4,55 @@ import jakarta.persistence.PersistenceException;
 import krilovs.andrejs.app.currency.Currency;
 import krilovs.andrejs.app.error.NoEntityException;
 import krilovs.andrejs.app.util.AbstractTestClass;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RateServiceTest extends AbstractTestClass {
-    private List<Rate> rates = new ArrayList<>();
+    private static final RateRequest BYN_EUR = new RateRequest("BYN", "EUR", BigDecimal.valueOf(2.9));
+
+    /** The rates in the database: no value (TRY), zero (CHF) and the two EUR rates the calculations are based on. */
+    private final List<RateResponse> responses = List.of(
+            response("EUR", "TRY", null),
+            response("EUR", "CHF", BigDecimal.ZERO),
+            response("EUR", "PLN", BigDecimal.valueOf(4.389)),
+            response("EUR", "USD", BigDecimal.valueOf(1.1224))
+    );
+
+    private final List<Rate> rates = responses.stream()
+            .map(r -> rate(r.baseCurrency().code(), r.targetCurrency().code(), r.rate()))
+            .toList();
 
     @InjectMocks
     private RateService service;
-
-    @BeforeEach
-    void setUp() {
-        super.load();
-        rates = List.of(
-                rate("EUR", "TRY", null),
-                rate("EUR", "CHF", BigDecimal.ZERO),
-                rate("EUR", "PLN", BigDecimal.valueOf(4.389)),
-                rate("EUR", "USD", BigDecimal.valueOf(1.1224))
-        );
-    }
 
     @Test
     void shouldReturnAvailableRates() {
         givenRates();
 
-        var expected = rates.stream()
-                .map(r -> response(r.getBaseCurrency().getCode(), r.getTargetCurrency().getCode(), r.getRate()))
-                .toList();
-        assertEquals(expected, service.findAll());
+        assertEquals(responses, service.findAll());
     }
 
     @ParameterizedTest
@@ -71,41 +73,63 @@ class RateServiceTest extends AbstractTestClass {
 
     @Test
     void shouldPersistNewRate() {
-        givenNativeQuery();
-        when(query.getSingleResult()).thenReturn(rate("BYN", "EUR", BigDecimal.valueOf(2.9)));
+        givenCurrencies();
 
-        var byn = service.persist(new RateRequest("BYN", "EUR", BigDecimal.valueOf(2.9)));
+        var byn = service.persist(BYN_EUR);
         assertEquals(response("BYN", "EUR", BigDecimal.valueOf(2.9)), byn);
+
+        var persisted = ArgumentCaptor.forClass(Rate.class);
+        verify(em).persist(persisted.capture());
+        verify(em).flush();
+        assertEquals("BYN", persisted.getValue().getId().getBaseCurrency());
+        assertEquals("EUR", persisted.getValue().getId().getTargetCurrency());
     }
 
-    @ParameterizedTest
-    @MethodSource("persistenceFailures")
-    void shouldNotPersistCurrencyRate(PersistenceException failure,
-                                      Class<? extends RuntimeException> expectedType,
-                                      String expectedMessage) {
-        givenNativeQuery();
-        when(query.getSingleResult()).thenThrow(failure);
+    @Test
+    void shouldNotPersistRateWhenCurrencyIsMissing() {
+        when(em.find(eq(Currency.class), anyString())).thenReturn(null);
 
-        var request = new RateRequest("BYN", "XXX", BigDecimal.valueOf(2.9));
-        var thrown = assertThrows(RuntimeException.class, () -> service.persist(request));
-        assertEquals(expectedType, thrown.getClass());
-        assertEquals(expectedMessage, thrown.getMessage());
+        var exception = assertThrows(NoEntityException.class, () -> service.persist(BYN_EUR));
+        assertEquals("Currency not found for rate pair", exception.getMessage());
+        assertEquals(BYN_EUR, exception.getValue());
+        verify(em, never()).persist(any());
+    }
+
+    @Test
+    void shouldNotPersistExistingRate() {
+        givenCurrencies();
+        var duplicate = new PersistenceException(new PSQLException("duplicate key", PSQLState.UNIQUE_VIOLATION));
+        doThrow(duplicate).when(em).flush();
+
+        var exception = assertThrows(NoEntityException.class, () -> service.persist(BYN_EUR));
+        assertEquals("Rate already exists", exception.getMessage());
+    }
+
+    @Test
+    void shouldNotPersistRateWhenDatabaseFails() {
+        givenCurrencies();
+        var failure = new PersistenceException("connection lost");
+        doThrow(failure).when(em).flush();
+
+        assertSame(failure, assertThrows(PersistenceException.class, () -> service.persist(BYN_EUR)));
     }
 
     @Test
     void shouldUpdateRate() {
-        var updated = rate("EUR", "TRY", BigDecimal.TEN);
-        givenNativeQuery();
-        when(query.getSingleResultOrNull()).thenReturn(updated);
+        givenCurrencies();
+        givenUpdatedRows(1);
 
         var lira = service.update(new RateRequest("eur", "try", BigDecimal.TEN));
         assertEquals(response("EUR", "TRY", BigDecimal.TEN), lira);
+        verify(query).setParameter("rate", BigDecimal.TEN);
+        verify(query).setParameter("base", "EUR");
+        verify(query).setParameter("target", "TRY");
     }
 
     @Test
     void shouldNotUpdateMissingRate() {
-        givenNativeQuery();
-        when(query.getSingleResultOrNull()).thenReturn(null);
+        givenCurrencies();
+        givenUpdatedRows(0);
 
         var request = new RateRequest("EUR", "TRY", BigDecimal.TEN);
         var exception = assertThrows(NoEntityException.class, () -> service.update(request));
@@ -118,14 +142,14 @@ class RateServiceTest extends AbstractTestClass {
         when(query.getResultList()).thenReturn(rates);
     }
 
-    private void givenNativeQuery() {
-        when(em.createNativeQuery(anyString(), eq(Rate.class))).thenReturn(query);
+    /** Every requested currency exists, as in the warmed-up shared cache. */
+    private void givenCurrencies() {
+        when(em.find(eq(Currency.class), anyString())).thenAnswer(call -> currencyEntity(call.getArgument(1)));
     }
 
-    private static Currency currencyEntity(String code) {
-        var currency = new Currency();
-        currency.setCode(code);
-        return currency;
+    private void givenUpdatedRows(int rows) {
+        when(em.createQuery(anyString())).thenReturn(query);
+        when(query.executeUpdate()).thenReturn(rows);
     }
 
     private static Rate rate(String baseCurrency, String targetCurrency, BigDecimal currencyRate) {
@@ -162,17 +186,6 @@ class RateServiceTest extends AbstractTestClass {
                 arguments("TRY", "EUR"),
                 arguments("GBP", "PLN"),
                 arguments("USD", "TRY")
-        );
-    }
-
-    private static Stream<Arguments> persistenceFailures() {
-        var foreignKey = new PersistenceException(new PSQLException("violates foreign key constraint", PSQLState.FOREIGN_KEY_VIOLATION));
-        var uniqueKey = new PersistenceException(new PSQLException("duplicate key", PSQLState.UNIQUE_VIOLATION));
-        var notDatabase = new PersistenceException("connection lost");
-        return Stream.of(
-                arguments(foreignKey, NoEntityException.class, "Currency not found for rate pair", "foreign key violation"),
-                arguments(uniqueKey, PersistenceException.class, uniqueKey.getMessage(), "primary key violation"),
-                arguments(notDatabase, PersistenceException.class, "connection lost", "not a database error")
         );
     }
 }

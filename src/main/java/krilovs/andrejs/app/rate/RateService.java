@@ -57,47 +57,42 @@ public class RateService {
     }
 
     public RateResponse persist(RateRequest request) {
-        var sql = """
-            INSERT INTO rate (base_currency, target_currency, rate)
-            VALUES (?1, ?2, ?3)
-            RETURNING base_currency, target_currency, rate""";
         return persistence.inTransaction(em -> {
+            var rate = MAPPER.toEntity(request, em);
             try {
-                var insertedItem = (Rate) em.createNativeQuery(sql, Rate.class)
-                        .setParameter(1, request.baseCurrencyCode().toUpperCase())
-                        .setParameter(2, request.targetCurrencyCode().toUpperCase())
-                        .setParameter(3, request.rate())
-                        .getSingleResult();
-                return MAPPER.toRateResponse(insertedItem);
+                em.persist(rate);
+                em.flush();
             }
             catch (PersistenceException e) {
-                // FK violation: one of the currencies does not exist in the currency table
-                if (findCause(e, PSQLException.class).filter(pg -> "23503".equals(pg.getSQLState())).isPresent()) {
-                    throw new NoEntityException("Currency not found for rate pair", request);
+                if (findCause(e, PSQLException.class).filter(pg -> "23505".equals(pg.getSQLState())).isPresent()) {
+                    throw new NoEntityException("Rate already exists", rate.getId());
                 }
                 throw e;
             }
+            return MAPPER.toRateResponse(rate);
         });
     }
 
     public RateResponse update(RateRequest request) {
-        var base = request.baseCurrencyCode().toUpperCase();
-        var target = request.targetCurrencyCode().toUpperCase();
-        var sql = """
-            UPDATE rate SET rate = ?3
-            WHERE base_currency = ?1 AND target_currency = ?2
-            RETURNING base_currency, target_currency, rate""";
-        var rate = persistence.inTransaction(em ->
-                (Rate) em.createNativeQuery(sql, Rate.class)
-                        .setParameter(1, base)
-                        .setParameter(2, target)
-                        .setParameter(3, request.rate())
-                        .getSingleResultOrNull()
-        );
-        if (rate == null) {
-            throw new NoEntityException("Exchange rate not found", base + target);
-        }
-        return MAPPER.toRateResponse(rate);
+        var jpql = """
+            UPDATE Rate r
+            SET r.rate = :rate
+            WHERE r.id.baseCurrency = :base
+                AND r.id.targetCurrency = :target
+        """;
+        return persistence.inTransaction(em -> {
+            var rate = MAPPER.toEntity(request, em);
+            var id = rate.getId();
+            var updated = em.createQuery(jpql)
+                    .setParameter("rate", rate.getRate())
+                    .setParameter("base", id.getBaseCurrency())
+                    .setParameter("target", id.getTargetCurrency())
+                    .executeUpdate();
+            if (updated == 0) {
+                throw new NoEntityException("Exchange rate not found", id);
+            }
+            return MAPPER.toRateResponse(rate);
+        });
     }
 
     private static Optional<Rate> pickCorrectRate(List<Rate> rates, String base, String target) {

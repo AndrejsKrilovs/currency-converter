@@ -55,7 +55,7 @@ dependencies {
   implementation("io.agroal:agroal-pool:$agroalVersion")
   implementation("io.agroal:agroal-narayana:$agroalVersion")
 
-  compileOnly(lombokString)
+  implementation(lombokString)
   testCompileOnly(lombokString)
   annotationProcessor(lombokString)
   testAnnotationProcessor(lombokString)

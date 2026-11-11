@@ -3,9 +3,11 @@ package krilovs.andrejs.app.util;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import krilovs.andrejs.app.config.PersistenceConfig;
+import krilovs.andrejs.app.currency.Currency;
 import krilovs.andrejs.app.currency.CurrencyResponse;
 import krilovs.andrejs.app.rate.Rate;
 import krilovs.andrejs.app.rate.RateResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.Mock;
@@ -28,11 +30,24 @@ public abstract class AbstractTestClass {
     @Mock(answer = Answers.RETURNS_SELF)
     protected TypedQuery<Rate> query;
 
-    protected void load() {
+    @BeforeEach
+    protected void stubPersistence() {
         lenient().when(persistence.withEntityManager(any()))
                 .thenAnswer(call -> call.<Function<EntityManager, Object>>getArgument(0).apply(em));
         lenient().when(persistence.inTransaction(any()))
                 .thenAnswer(call -> call.<Function<EntityManager, Object>>getArgument(0).apply(em));
+    }
+
+    protected static Currency currencyEntity(String code) {
+        return currencyEntity(code, null, null);
+    }
+
+    protected static Currency currencyEntity(String code, String name, String symbol) {
+        var currency = new Currency();
+        currency.setCode(code);
+        currency.setName(name);
+        currency.setSymbol(symbol);
+        return currency;
     }
 
     protected static CurrencyResponse currency(String code) {

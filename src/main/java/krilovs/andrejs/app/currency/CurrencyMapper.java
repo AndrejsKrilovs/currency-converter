@@ -1,5 +1,7 @@
 package krilovs.andrejs.app.currency;
 
+import jakarta.persistence.EntityManager;
+import org.mapstruct.Context;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
 
@@ -9,4 +11,8 @@ public interface CurrencyMapper {
 
     CurrencyResponse toCurrencyResponse(Currency currency);
     Currency toCurrency(CurrencyRequest request);
+
+    default Currency toCurrency(String code, @Context EntityManager em) {
+        return em.find(Currency.class, code.toUpperCase());
+    }
 }
