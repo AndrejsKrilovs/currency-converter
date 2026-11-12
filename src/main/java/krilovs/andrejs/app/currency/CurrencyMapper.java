@@ -1,18 +1,22 @@
 package krilovs.andrejs.app.currency;
 
-import jakarta.persistence.EntityManager;
-import org.mapstruct.Context;
-import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
+import krilovs.andrejs.app.config.PersistenceConfig;
+import lombok.experimental.UtilityClass;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 
-@Mapper
-public interface CurrencyMapper {
-    CurrencyMapper INSTANCE = Mappers.getMapper(CurrencyMapper.class);
+import static krilovs.andrejs.app.util.DynamicEntities.CURRENCY;
 
-    CurrencyResponse toCurrencyResponse(Currency currency);
-    Currency toCurrency(CurrencyRequest request);
+/** Dynamic entities have no getters, so MapStruct has nothing to map: the properties are read by name. */
+@UtilityClass
+public class CurrencyMapper {
+    public static CurrencyResponse toResponse(DynamicEntity currency) {
+        return new CurrencyResponse(currency.get("code"), currency.get("name"), currency.get("symbol"));
+    }
 
-    default Currency toCurrency(String code, @Context EntityManager em) {
-        return em.find(Currency.class, code.toUpperCase());
+    public static DynamicEntity toEntity(CurrencyRequest request, PersistenceConfig persistence) {
+        return persistence.newEntity(CURRENCY)
+                .set("code", request.code())
+                .set("name", request.name())
+                .set("symbol", request.symbol());
     }
 }

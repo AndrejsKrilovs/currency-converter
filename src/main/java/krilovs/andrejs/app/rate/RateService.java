@@ -1,161 +1,144 @@
 package krilovs.andrejs.app.rate;
 
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
+import jakarta.persistence.TypedQuery;
 import krilovs.andrejs.app.config.PersistenceConfig;
 import krilovs.andrejs.app.error.NoEntityException;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.persistence.config.QueryHints;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 import org.postgresql.util.PSQLException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RequiredArgsConstructor
 public class RateService {
     private final static String PIVOT_CURRENCY = "EUR";
-    private final static RateMapper MAPPER = RateMapper.INSTANCE;
+    private final static String UNIQUE_VIOLATION = "23505";
+    private final static int CALCULATED_SCALE = 13;
     private final PersistenceConfig persistence;
 
     public List<RateResponse> findAll() {
-        var sql = "SELECT r FROM Rate r";
-        return persistence.withEntityManager(em -> {
-            var queryResult = em.createQuery(sql, Rate.class)
-                    .setHint(QueryHints.LEFT_FETCH, "r.baseCurrency")
-                    .setHint(QueryHints.LEFT_FETCH, "r.targetCurrency")
-                    .getResultList();
-            return queryResult.stream()
-                    .map(MAPPER::toRateResponse)
-                    .toList();
-        });
+        return persistence.withEntityManager(em -> rates(em, "SELECT r FROM Rate r").getResultList().stream()
+                .map(RateMapper::toResponse)
+                .toList());
     }
 
+    /** Direct rate, else the inverse of the opposite one, else a cross rate through {@value PIVOT_CURRENCY}. */
     public Optional<RateResponse> findByPair(String base, String target) {
         var from = base.toUpperCase();
         var to = target.toUpperCase();
         var sql = """
             SELECT r FROM Rate r
-            WHERE (r.id.baseCurrency = :base AND r.id.targetCurrency = :target)
-               OR (r.id.baseCurrency = :target AND r.id.targetCurrency = :base)
-               OR (r.id.baseCurrency = :pivot AND r.id.targetCurrency IN (:target, :base))
-               OR (r.id.baseCurrency IN (:target, :base) AND r.id.targetCurrency = :pivot)
+            WHERE (r.baseCurrencyCode = :base AND r.targetCurrencyCode = :target)
+               OR (r.baseCurrencyCode = :target AND r.targetCurrencyCode = :base)
+               OR (r.baseCurrencyCode = :pivot AND r.targetCurrencyCode IN (:target, :base))
+               OR (r.baseCurrencyCode IN (:target, :base) AND r.targetCurrencyCode = :pivot)
             """;
-        var rates = persistence.withEntityManager(em ->
-                em.createQuery(sql, Rate.class)
-                        .setHint(QueryHints.LEFT_FETCH, "r.baseCurrency")
-                        .setHint(QueryHints.LEFT_FETCH, "r.targetCurrency")
-                        .setParameter("base", from)
-                        .setParameter("target", to)
-                        .setParameter("pivot", PIVOT_CURRENCY)
-                        .getResultList()
-        );
-        var currentRate = pickCorrectRate(rates, from, to).filter(RateService::hasValue)
-                .or(() -> pickCorrectRate(rates, to, from).flatMap(this::invertRate))
-                .or(() -> crossViaPivot(rates, from, to));
-        return currentRate.map(MAPPER::toRateResponse);
+        var rates = persistence.withEntityManager(em -> rates(em, sql)
+                .setParameter("base", from)
+                .setParameter("target", to)
+                .setParameter("pivot", PIVOT_CURRENCY)
+                .getResultList().stream()
+                .map(RateMapper::toResponse)
+                .toList());
+        return find(rates, from, to).filter(RateService::hasValue)
+                .or(() -> find(rates, to, from).flatMap(RateService::invert))
+                .or(() -> cross(rates, from, to));
     }
 
     public RateResponse persist(RateRequest request) {
         return persistence.inTransaction(em -> {
-            var rate = MAPPER.toEntity(request, em);
+            var rate = RateMapper.toEntity(request, persistence, em);
             try {
                 em.persist(rate);
                 em.flush();
             }
             catch (PersistenceException e) {
-                if (findCause(e, PSQLException.class).filter(pg -> "23505".equals(pg.getSQLState())).isPresent()) {
-                    throw new NoEntityException("Rate already exists", rate.getId());
+                if (findCause(e, PSQLException.class).filter(pg -> UNIQUE_VIOLATION.equals(pg.getSQLState())).isPresent()) {
+                    throw new NoEntityException("Rate already exists", pair(rate));
                 }
                 throw e;
             }
-            return MAPPER.toRateResponse(rate);
+            return RateMapper.toResponse(rate);
         });
     }
 
+    /** One UPDATE statement: merge() would SELECT the row first, and a missing row is detected by the update count. */
     public RateResponse update(RateRequest request) {
         var jpql = """
-            UPDATE Rate r
-            SET r.rate = :rate
-            WHERE r.id.baseCurrency = :base
-                AND r.id.targetCurrency = :target
-        """;
+            UPDATE Rate r SET r.rate = :rate
+            WHERE r.baseCurrencyCode = :base AND r.targetCurrencyCode = :target
+            """;
         return persistence.inTransaction(em -> {
-            var rate = MAPPER.toEntity(request, em);
-            var id = rate.getId();
+            var rate = RateMapper.toEntity(request, persistence, em);
+            var pair = pair(rate);
             var updated = em.createQuery(jpql)
-                    .setParameter("rate", rate.getRate())
-                    .setParameter("base", id.getBaseCurrency())
-                    .setParameter("target", id.getTargetCurrency())
+                    .setParameter("rate", rate.get("rate"))
+                    .setParameter("base", pair.get("baseCurrency"))
+                    .setParameter("target", pair.get("targetCurrency"))
                     .executeUpdate();
             if (updated == 0) {
-                throw new NoEntityException("Exchange rate not found", id);
+                throw new NoEntityException("Exchange rate not found", pair);
             }
-            return MAPPER.toRateResponse(rate);
+            return RateMapper.toResponse(rate);
         });
     }
 
-    private static Optional<Rate> pickCorrectRate(List<Rate> rates, String base, String target) {
+    /** Rate rows with both currencies fetched, because the entities are used after the EntityManager is closed. */
+    private static TypedQuery<DynamicEntity> rates(EntityManager em, String jpql) {
+        return em.createQuery(jpql, DynamicEntity.class)
+                .setHint(QueryHints.LEFT_FETCH, "r.baseCurrency")
+                .setHint(QueryHints.LEFT_FETCH, "r.targetCurrency");
+    }
+
+    private static Map<String, String> pair(DynamicEntity rate) {
+        return Map.of("baseCurrency", rate.get("baseCurrencyCode"), "targetCurrency", rate.get("targetCurrencyCode"));
+    }
+
+    private static Optional<RateResponse> find(List<RateResponse> rates, String base, String target) {
         return rates.stream()
-                .filter(r -> r.getId().getBaseCurrency().equals(base) && r.getId().getTargetCurrency().equals(target))
+                .filter(r -> r.baseCurrency().code().equals(base) && r.targetCurrency().code().equals(target))
                 .findFirst();
     }
 
-    private static Boolean hasValue(Rate rate) {
-        return rate.getRate() != null && rate.getRate().signum() != 0;
+    private static boolean hasValue(RateResponse rate) {
+        return rate.rate() != null && rate.rate().signum() != 0;
     }
 
-    private Optional<Rate> toPivotRate(List<Rate> rates, String code) {
-        return pickCorrectRate(rates, PIVOT_CURRENCY, code)
-                .or(() -> pickCorrectRate(rates, code, PIVOT_CURRENCY).flatMap(this::invertRate))
+    private static Optional<RateResponse> invert(RateResponse rate) {
+        return Optional.of(rate).filter(RateService::hasValue)
+                .map(r -> new RateResponse(
+                        r.targetCurrency(), r.baseCurrency(),
+                        BigDecimal.ONE.divide(r.rate(), CALCULATED_SCALE, RoundingMode.HALF_UP)
+                ));
+    }
+
+    /** Rate of the currency against the pivot, taken from the opposite direction if needed. */
+    private static Optional<RateResponse> againstPivot(List<RateResponse> rates, String code) {
+        return find(rates, PIVOT_CURRENCY, code)
+                .or(() -> find(rates, code, PIVOT_CURRENCY).flatMap(RateService::invert))
                 .filter(RateService::hasValue);
     }
 
-    private Optional<Rate> crossViaPivot(List<Rate> rates, String base, String target) {
-        var baseCurrencyRate = toPivotRate(rates, base).orElse(null);
-        var targetCurrencyRate = toPivotRate(rates, target).orElse(null);
-        if (baseCurrencyRate == null || targetCurrencyRate == null) {
-            return Optional.empty();
-        }
-
-        var id = new RateId();
-        id.setBaseCurrency(base);
-        id.setTargetCurrency(target);
-
-        var crossRate = new Rate();
-        crossRate.setId(id);
-        crossRate.setBaseCurrency(baseCurrencyRate.getTargetCurrency());
-        crossRate.setTargetCurrency(targetCurrencyRate.getTargetCurrency());
-
-        var calculatedRate = targetCurrencyRate.getRate().divide(baseCurrencyRate.getRate(), 13, RoundingMode.HALF_UP);
-        crossRate.setRate(calculatedRate);
-        return Optional.of(crossRate);
-    }
-
-    private Optional<Rate> invertRate(Rate rate) {
-        if (!hasValue(rate)) {
-            return Optional.empty();
-        }
-
-        var id = new RateId();
-        id.setBaseCurrency(rate.getId().getTargetCurrency());
-        id.setTargetCurrency(rate.getId().getBaseCurrency());
-
-        var inverse = new Rate();
-        inverse.setId(id);
-        inverse.setBaseCurrency(rate.getTargetCurrency());
-        inverse.setTargetCurrency(rate.getBaseCurrency());
-        inverse.setRate(BigDecimal.ONE.divide(rate.getRate(), 13, RoundingMode.HALF_UP));
-        return Optional.of(inverse);
+    private static Optional<RateResponse> cross(List<RateResponse> rates, String base, String target) {
+        return againstPivot(rates, base).flatMap(pivotToBase ->
+                againstPivot(rates, target).map(pivotToTarget -> new RateResponse(
+                        pivotToBase.targetCurrency(), pivotToTarget.targetCurrency(),
+                        pivotToTarget.rate().divide(pivotToBase.rate(), CALCULATED_SCALE, RoundingMode.HALF_UP)
+                )));
     }
 
     private static <T extends Throwable> Optional<T> findCause(Throwable throwable, Class<T> targetClass) {
-        Throwable current = throwable;
-        while (current != null) {
+        for (var current = throwable; current != null; current = current.getCause()) {
             if (targetClass.isInstance(current)) {
-                return Optional.of((T) current);
+                return Optional.of(targetClass.cast(current));
             }
-            current = current.getCause();
         }
         return Optional.empty();
     }

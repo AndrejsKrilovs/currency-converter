@@ -2,34 +2,37 @@ package krilovs.andrejs.app.currency;
 
 import krilovs.andrejs.app.config.PersistenceConfig;
 import lombok.RequiredArgsConstructor;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 
 import java.util.List;
 import java.util.Optional;
 
+import static krilovs.andrejs.app.util.DynamicEntities.CURRENCY;
+
 @RequiredArgsConstructor
 public class CurrencyService {
-    private final static CurrencyMapper MAPPER = CurrencyMapper.INSTANCE;
     private final PersistenceConfig persistence;
 
     public List<CurrencyResponse> findAll() {
         return persistence.withEntityManager(em ->
-                em.createQuery("SELECT c FROM Currency c ORDER BY c.code", Currency.class).getResultList().stream()
-                        .map(MAPPER::toCurrencyResponse)
+                em.createQuery("SELECT c FROM Currency c ORDER BY c.code", DynamicEntity.class).getResultList().stream()
+                        .map(CurrencyMapper::toResponse)
                         .toList()
         );
     }
 
     public Optional<CurrencyResponse> findById(String code) {
-        return Optional.ofNullable(persistence.withEntityManager(em -> em.find(Currency.class, code)))
-                .map(MAPPER::toCurrencyResponse);
+        return Optional.ofNullable(persistence.<DynamicEntity>withEntityManager(em ->
+                        em.find(persistence.entityClass(CURRENCY), code)))
+                .map(CurrencyMapper::toResponse);
     }
 
     public CurrencyResponse persist(CurrencyRequest request) {
         return persistence.inTransaction(em -> {
-            var currency = MAPPER.toCurrency(request);
+            var currency = CurrencyMapper.toEntity(request, persistence);
             em.persist(currency);
             em.flush();
-            return MAPPER.toCurrencyResponse(currency);
+            return CurrencyMapper.toResponse(currency);
         });
     }
 }

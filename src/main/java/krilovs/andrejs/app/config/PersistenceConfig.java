@@ -15,9 +15,7 @@ import jakarta.transaction.Status;
 import jakarta.transaction.UserTransaction;
 import krilovs.andrejs.app.config.logging.PersistenceSessionLog;
 import krilovs.andrejs.app.config.logging.WideEvent;
-import krilovs.andrejs.app.currency.Currency;
-import krilovs.andrejs.app.rate.Rate;
-import krilovs.andrejs.app.rate.RateId;
+import krilovs.andrejs.app.util.DynamicEntities;
 import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
@@ -25,7 +23,10 @@ import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.persistence.config.PersistenceUnitProperties;
+import org.eclipse.persistence.dynamic.DynamicClassLoader;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 import org.eclipse.persistence.jpa.PersistenceProvider;
+import org.eclipse.persistence.jpa.dynamic.JPADynamicHelper;
 import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.transaction.JTA11TransactionController;
 import org.eclipse.persistence.transaction.JTATransactionController;
@@ -38,12 +39,17 @@ import java.util.function.Function;
 
 @Slf4j
 public class PersistenceConfig implements AutoCloseable {
+    private final DynamicEntities types;
     private final AgroalDataSource dataSource;
     private final EntityManagerFactory factory;
+    private final DynamicClassLoader classLoader;
     private final AppConfig config;
 
     public PersistenceConfig() {
         config = AppConfigLoader.load();
+        classLoader = new DynamicClassLoader(Thread.currentThread().getContextClassLoader());
+        types = DynamicEntities.define(classLoader);
+
         migrate();
         var tm = TransactionManager.transactionManager();
         var registry =
@@ -67,6 +73,7 @@ public class PersistenceConfig implements AutoCloseable {
         JTATransactionController.setDefaultTransactionManager(tm);
         JTA11TransactionController.setDefaultTransactionSynchronizationRegistry(registry);
         factory = createEntityManagerFactory(dataSource);
+        new JPADynamicHelper(factory).addTypes(false, false, types.all());
     }
 
     @Override
@@ -112,6 +119,16 @@ public class PersistenceConfig implements AutoCloseable {
         }
     }
 
+    /** New instance of the dynamic entity, e.g. {@link DynamicEntities#CURRENCY}. */
+    public DynamicEntity newEntity(String type) {
+        return types.get(type).newDynamicEntity();
+    }
+
+    /** Generated class of the dynamic entity, for {@code find} and native queries. */
+    public Class<? extends DynamicEntity> entityClass(String type) {
+        return types.get(type).getJavaClass().asSubclass(DynamicEntity.class);
+    }
+
     private EntityManager createEntityManager() {
         return factory.createEntityManager();
     }
@@ -146,12 +163,10 @@ public class PersistenceConfig implements AutoCloseable {
     /** Persistence unit described in code instead of META-INF/persistence.xml. */
     private EntityManagerFactory createEntityManagerFactory(AgroalDataSource dataSource) {
         return new PersistenceConfiguration(Objects.requireNonNullElse(config.database().configName(), "playground"))
-                .managedClass(Rate.class)
-                .managedClass(RateId.class)
-                .managedClass(Currency.class)
                 .provider(PersistenceProvider.class.getName())
                 .sharedCacheMode(SharedCacheMode.ENABLE_SELECTIVE)
                 .transactionType(PersistenceUnitTransactionType.JTA)
+                .property(PersistenceUnitProperties.CLASSLOADER, classLoader)
                 .property(PersistenceUnitProperties.JTA_DATASOURCE, dataSource)
                 .property(PersistenceUnitProperties.LOGGING_LEVEL, SessionLog.WARNING_LABEL)
                 .property(PersistenceUnitProperties.LOGGING_PARAMETERS, Boolean.TRUE.toString())

@@ -1,6 +1,7 @@
 package krilovs.andrejs.app.currency;
 
 import krilovs.andrejs.app.util.AbstractTestClass;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -15,7 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CurrencyServiceTest extends AbstractTestClass {
-    private final List<Currency> currencies = List.of(
+    private final List<DynamicEntity> currencies = List.of(
             currencyEntity("EUR", "Euro", "€"),
             currencyEntity("USD", "US Dollar", "$")
     );
@@ -25,7 +26,7 @@ class CurrencyServiceTest extends AbstractTestClass {
 
     @Test
     void shouldReturnAvailableCurrencies() {
-        when(em.createQuery(anyString(), eq(Currency.class)).getResultList()).thenReturn(currencies);
+        when(em.createQuery(anyString(), eq(DynamicEntity.class)).getResultList()).thenReturn(currencies);
         assertEquals(
                 List.of(currency("EUR", "Euro", "€"), currency("USD", "US Dollar", "$")),
                 service.findAll()
@@ -34,13 +35,13 @@ class CurrencyServiceTest extends AbstractTestClass {
 
     @Test
     void shouldFindAvailableCurrency() {
-        when(em.find(eq(Currency.class), anyString())).thenReturn(currencies.getFirst());
+        when(em.find(eq(DynamicEntity.class), anyString())).thenReturn(currencies.getFirst());
         assertEquals(currency("EUR", "Euro", "€"), service.findById("EUR").orElseThrow());
     }
 
     @Test
     void shouldNotFindMissingCurrency() {
-        when(em.find(eq(Currency.class), anyString())).thenReturn(null);
+        when(em.find(eq(DynamicEntity.class), anyString())).thenReturn(null);
         assertTrue(service.findById("XXX").isEmpty());
     }
 
@@ -49,11 +50,11 @@ class CurrencyServiceTest extends AbstractTestClass {
         var response = service.persist(new CurrencyRequest("RUB", "Russian Ruble", "₽"));
         assertEquals(currency("RUB", "Russian Ruble", "₽"), response);
 
-        var persisted = ArgumentCaptor.forClass(Currency.class);
+        var persisted = ArgumentCaptor.forClass(DynamicEntity.class);
         verify(em).persist(persisted.capture());
         verify(em).flush();
-        assertEquals("RUB", persisted.getValue().getCode());
-        assertEquals("Russian Ruble", persisted.getValue().getName());
-        assertEquals("₽", persisted.getValue().getSymbol());
+        assertEquals("RUB", persisted.getValue().get("code"));
+        assertEquals("Russian Ruble", persisted.getValue().get("name"));
+        assertEquals("₽", persisted.getValue().get("symbol"));
     }
 }

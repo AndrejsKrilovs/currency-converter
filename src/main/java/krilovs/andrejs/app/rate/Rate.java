@@ -1,34 +1,37 @@
 package krilovs.andrejs.app.rate;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.EmbeddedId;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.MapsId;
-import krilovs.andrejs.app.currency.Currency;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.experimental.UtilityClass;
+import org.eclipse.persistence.annotations.CacheIsolationType;
+import org.eclipse.persistence.dynamic.DynamicClassLoader;
+import org.eclipse.persistence.dynamic.DynamicType;
+import org.eclipse.persistence.jpa.dynamic.JPADynamicTypeBuilder;
 
 import java.math.BigDecimal;
 
-@Getter
-@Setter
-@Entity
+import static krilovs.andrejs.app.util.DynamicEntities.build;
+import static krilovs.andrejs.app.util.DynamicEntities.builder;
+
+/** Dynamic entity of the rate table; its key is the pair of currency columns. */
+@UtilityClass
 public class Rate {
-    @EmbeddedId
-    private RateId id;
+    public static DynamicType define(DynamicClassLoader loader, DynamicType currency) {
+        var builder = builder(loader, Rate.class, "rate", "base_currency", "target_currency");
+        builder.addDirectMapping("baseCurrencyCode", String.class, "base_currency");
+        builder.addDirectMapping("targetCurrencyCode", String.class, "target_currency");
+        builder.addDirectMapping("rate", BigDecimal.class, "rate");
+        relation(builder, "baseCurrency", currency, "base_currency");
+        relation(builder, "targetCurrency", currency, "target_currency");
+        // Rates are written with SQL that bypasses the cache, so they must never sit in the shared cache
+        return build(builder, Rate.class, CacheIsolationType.ISOLATED);
+    }
 
-    @MapsId("baseCurrency")
-    @JoinColumn(name = "base_currency")
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    private Currency baseCurrency;
-
-    @MapsId("targetCurrency")
-    @JoinColumn(name = "target_currency")
-    @ManyToOne(fetch = FetchType.LAZY, optional = false, cascade = CascadeType.ALL)
-    private Currency targetCurrency;
-
-    private BigDecimal rate;
+    /**
+     * The key columns are already written by the direct mappings, so the relation is read-only.
+     * No indirection: entities are used after the EntityManager is closed.
+     */
+    private static void relation(JPADynamicTypeBuilder builder, String name, DynamicType currency, String column) {
+        var mapping = builder.addOneToOneMapping(name, currency, column);
+        mapping.setIsReadOnly(true);
+        mapping.dontUseIndirection();
+    }
 }

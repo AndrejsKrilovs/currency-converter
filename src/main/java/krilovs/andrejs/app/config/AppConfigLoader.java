@@ -2,13 +2,12 @@ package krilovs.andrejs.app.config;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+import lombok.experimental.UtilityClass;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@UtilityClass
 public final class AppConfigLoader {
     private static final String DEFAULT_RESOURCE = "application.yaml";
     private static final YAMLMapper MAPPER = YAMLMapper.builder()

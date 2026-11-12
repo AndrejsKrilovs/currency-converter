@@ -1,40 +1,40 @@
 package krilovs.andrejs.app.rate;
 
 import jakarta.persistence.EntityManager;
+import krilovs.andrejs.app.config.PersistenceConfig;
 import krilovs.andrejs.app.currency.CurrencyMapper;
 import krilovs.andrejs.app.error.NoEntityException;
-import org.mapstruct.AfterMapping;
-import org.mapstruct.Context;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
-import org.mapstruct.Named;
-import org.mapstruct.factory.Mappers;
+import lombok.experimental.UtilityClass;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 
-@Mapper(uses = CurrencyMapper.class)
-public interface RateMapper {
-    RateMapper INSTANCE = Mappers.getMapper(RateMapper.class);
+import static krilovs.andrejs.app.util.DynamicEntities.CURRENCY;
+import static krilovs.andrejs.app.util.DynamicEntities.RATE;
 
-    RateResponse toRateResponse(Rate rate);
-
-    @Mapping(target = "id", source = "request")
-    @Mapping(target = "baseCurrency", source = "baseCurrencyCode")
-    @Mapping(target = "targetCurrency", source = "targetCurrencyCode")
-    Rate toEntity(RateRequest request, @Context EntityManager em);
-
-    @Mapping(target = "baseCurrency", source = "baseCurrencyCode", qualifiedByName = "upperCase")
-    @Mapping(target = "targetCurrency", source = "targetCurrencyCode", qualifiedByName = "upperCase")
-    RateId toRateId(RateRequest request);
-
-    @Named("upperCase")
-    default String upperCase(String code) {
-        return code.toUpperCase();
+@UtilityClass
+public class RateMapper {
+    public static RateResponse toResponse(DynamicEntity rate) {
+        return new RateResponse(
+                CurrencyMapper.toResponse(rate.get("baseCurrency")),
+                CurrencyMapper.toResponse(rate.get("targetCurrency")),
+                rate.get("rate")
+        );
     }
 
-    @AfterMapping
-    default void requireCurrencies(RateRequest request, @MappingTarget Rate rate) {
-        if (rate.getBaseCurrency() == null || rate.getTargetCurrency() == null) {
+    /** Key, value and both currencies (found through the EntityManager, i.e. the shared cache); both must exist. */
+    public static DynamicEntity toEntity(RateRequest request, PersistenceConfig persistence, EntityManager em) {
+        var base = request.baseCurrencyCode().toUpperCase();
+        var target = request.targetCurrencyCode().toUpperCase();
+        DynamicEntity baseCurrency = em.find(persistence.entityClass(CURRENCY), base);
+        DynamicEntity targetCurrency = em.find(persistence.entityClass(CURRENCY), target);
+        if (baseCurrency == null || targetCurrency == null) {
             throw new NoEntityException("Currency not found for rate pair", request);
         }
+
+        return persistence.newEntity(RATE)
+                .set("baseCurrencyCode", base)
+                .set("targetCurrencyCode", target)
+                .set("baseCurrency", baseCurrency)
+                .set("targetCurrency", targetCurrency)
+                .set("rate", request.rate());
     }
 }

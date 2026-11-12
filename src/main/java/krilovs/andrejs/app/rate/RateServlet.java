@@ -26,9 +26,8 @@ public class RateServlet extends AbstractServlet {
             case "/exchangeRates" -> respondList(resp, "rates", rateService.findAll());
             case "/exchangeRate" -> {
                 var pair = extractPair(req);
-                var rate = rateService.findByPair(pair.base(), pair.target())
-                        .orElseThrow(() -> new NoEntityException("Exchange pair not found", List.of(pair.base(), pair.target())));
-                respond(resp, HttpServletResponse.SC_OK, rate);
+                respond(resp, HttpServletResponse.SC_OK, rateService.findByPair(pair.base(), pair.target())
+                        .orElseThrow(() -> new NoEntityException("Exchange pair not found", List.of(pair.base(), pair.target()))));
             }
             default -> handleNotFound(resp);
         }
@@ -37,9 +36,7 @@ public class RateServlet extends AbstractServlet {
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         if ("/exchangeRates".equals(req.getServletPath())) {
-            var request = body(req, RateRequest.class);
-            var rate = rateService.persist(request);
-            respond(resp, HttpServletResponse.SC_CREATED, rate);
+            respond(resp, HttpServletResponse.SC_CREATED, rateService.persist(body(req, RateRequest.class)));
             return;
         }
         handleNotFound(resp);
@@ -49,10 +46,8 @@ public class RateServlet extends AbstractServlet {
     protected void doPatch(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         if ("/exchangeRate".equals(req.getServletPath())) {
             var pair = extractPair(req);
-            var rateValue = body(req, UpdateRateRequest.class);
-            var request = validate(new RateRequest(pair.base(), pair.target(), rateValue.rate()));
-            var rate = rateService.update(request);
-            respond(resp, HttpServletResponse.SC_ACCEPTED, rate);
+            var request = validate(new RateRequest(pair.base(), pair.target(), body(req, UpdateRateRequest.class).rate()));
+            respond(resp, HttpServletResponse.SC_ACCEPTED, rateService.update(request));
             return;
         }
         handleNotFound(resp);

@@ -1,9 +1,9 @@
 package krilovs.andrejs.app.rate;
 
 import jakarta.persistence.PersistenceException;
-import krilovs.andrejs.app.currency.Currency;
 import krilovs.andrejs.app.error.NoEntityException;
 import krilovs.andrejs.app.util.AbstractTestClass;
+import org.eclipse.persistence.dynamic.DynamicEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -15,6 +15,7 @@ import org.postgresql.util.PSQLState;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,8 +42,8 @@ class RateServiceTest extends AbstractTestClass {
             response("EUR", "USD", BigDecimal.valueOf(1.1224))
     );
 
-    private final List<Rate> rates = responses.stream()
-            .map(r -> rate(r.baseCurrency().code(), r.targetCurrency().code(), r.rate()))
+    private final List<DynamicEntity> rates = responses.stream()
+            .map(r -> rateEntity(r.baseCurrency().code(), r.targetCurrency().code(), r.rate()))
             .toList();
 
     @InjectMocks
@@ -75,19 +76,18 @@ class RateServiceTest extends AbstractTestClass {
     void shouldPersistNewRate() {
         givenCurrencies();
 
-        var byn = service.persist(BYN_EUR);
-        assertEquals(response("BYN", "EUR", BigDecimal.valueOf(2.9)), byn);
+        assertEquals(response("BYN", "EUR", BigDecimal.valueOf(2.9)), service.persist(BYN_EUR));
 
-        var persisted = ArgumentCaptor.forClass(Rate.class);
+        var persisted = ArgumentCaptor.forClass(DynamicEntity.class);
         verify(em).persist(persisted.capture());
         verify(em).flush();
-        assertEquals("BYN", persisted.getValue().getId().getBaseCurrency());
-        assertEquals("EUR", persisted.getValue().getId().getTargetCurrency());
+        assertEquals("BYN", persisted.getValue().get("baseCurrencyCode"));
+        assertEquals("EUR", persisted.getValue().get("targetCurrencyCode"));
     }
 
     @Test
     void shouldNotPersistRateWhenCurrencyIsMissing() {
-        when(em.find(eq(Currency.class), anyString())).thenReturn(null);
+        when(em.find(eq(DynamicEntity.class), anyString())).thenReturn(null);
 
         var exception = assertThrows(NoEntityException.class, () -> service.persist(BYN_EUR));
         assertEquals("Currency not found for rate pair", exception.getMessage());
@@ -103,6 +103,7 @@ class RateServiceTest extends AbstractTestClass {
 
         var exception = assertThrows(NoEntityException.class, () -> service.persist(BYN_EUR));
         assertEquals("Rate already exists", exception.getMessage());
+        assertEquals(Map.of("baseCurrency", "BYN", "targetCurrency", "EUR"), exception.getValue());
     }
 
     @Test
@@ -134,39 +135,22 @@ class RateServiceTest extends AbstractTestClass {
         var request = new RateRequest("EUR", "TRY", BigDecimal.TEN);
         var exception = assertThrows(NoEntityException.class, () -> service.update(request));
         assertEquals("Exchange rate not found", exception.getMessage());
-
-        var rate = new RateId();
-        rate.setBaseCurrency("EUR");
-        rate.setTargetCurrency("TRY");
-        assertEquals(rate, exception.getValue());
+        assertEquals(Map.of("baseCurrency", "EUR", "targetCurrency", "TRY"), exception.getValue());
     }
 
     private void givenRates() {
-        when(em.createQuery(anyString(), eq(Rate.class))).thenReturn(query);
+        when(em.createQuery(anyString(), eq(DynamicEntity.class))).thenReturn(query);
         when(query.getResultList()).thenReturn(rates);
     }
 
     /** Every requested currency exists, as in the warmed-up shared cache. */
     private void givenCurrencies() {
-        when(em.find(eq(Currency.class), anyString())).thenAnswer(call -> currencyEntity(call.getArgument(1)));
+        when(em.find(eq(DynamicEntity.class), anyString())).thenAnswer(call -> currencyEntity(call.getArgument(1)));
     }
 
     private void givenUpdatedRows(int rows) {
         when(em.createQuery(anyString())).thenReturn(query);
         when(query.executeUpdate()).thenReturn(rows);
-    }
-
-    private static Rate rate(String baseCurrency, String targetCurrency, BigDecimal currencyRate) {
-        var id = new RateId();
-        id.setBaseCurrency(baseCurrency);
-        id.setTargetCurrency(targetCurrency);
-
-        var rate = new Rate();
-        rate.setId(id);
-        rate.setRate(currencyRate);
-        rate.setBaseCurrency(currencyEntity(baseCurrency));
-        rate.setTargetCurrency(currencyEntity(targetCurrency));
-        return rate;
     }
 
     /** Expected rates are written out by hand (13 decimals, as the service calculates), based on EUR->USD 1.1224 and EUR->PLN 4.389. */

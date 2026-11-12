@@ -18,9 +18,8 @@ public class CurrencyServlet extends AbstractServlet {
             case "/currencies" -> respondList(resp, "currencies", currencyService.findAll());
             case "/currency" -> {
                 var code = pathValue(req, "Missing currency code");
-                var currency = currencyService.findById(code)
-                        .orElseThrow(() -> new NoEntityException("Currency code not found", code));
-                respond(resp, HttpServletResponse.SC_OK, currency);
+                respond(resp, HttpServletResponse.SC_OK, currencyService.findById(code)
+                        .orElseThrow(() -> new NoEntityException("Currency code not found", code)));
             }
             default -> handleNotFound(resp);
         }
@@ -29,8 +28,7 @@ public class CurrencyServlet extends AbstractServlet {
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         if ("/currencies".equals(req.getServletPath())) {
-            var currency = currencyService.persist(body(req, CurrencyRequest.class));
-            respond(resp, HttpServletResponse.SC_CREATED, currency);
+            respond(resp, HttpServletResponse.SC_CREATED, currencyService.persist(body(req, CurrencyRequest.class)));
             return;
         }
         handleNotFound(resp);
