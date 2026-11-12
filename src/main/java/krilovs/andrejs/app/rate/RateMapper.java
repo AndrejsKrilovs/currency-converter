@@ -1,7 +1,7 @@
 package krilovs.andrejs.app.rate;
 
 import jakarta.persistence.EntityManager;
-import krilovs.andrejs.app.config.PersistenceConfig;
+import krilovs.andrejs.app.config.jpa.PersistenceConfig;
 import krilovs.andrejs.app.currency.CurrencyMapper;
 import krilovs.andrejs.app.error.NoEntityException;
 import lombok.experimental.UtilityClass;

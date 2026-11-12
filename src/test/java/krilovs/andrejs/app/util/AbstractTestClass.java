@@ -2,7 +2,7 @@ package krilovs.andrejs.app.util;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
-import krilovs.andrejs.app.config.PersistenceConfig;
+import krilovs.andrejs.app.config.jpa.PersistenceConfig;
 import krilovs.andrejs.app.currency.CurrencyResponse;
 import krilovs.andrejs.app.rate.RateResponse;
 import org.eclipse.persistence.dynamic.DynamicEntity;

@@ -1,6 +1,6 @@
 import jakarta.servlet.DispatcherType;
 import krilovs.andrejs.app.config.logging.WideEventFilter;
-import krilovs.andrejs.app.config.PersistenceConfig;
+import krilovs.andrejs.app.config.jpa.PersistenceConfig;
 import krilovs.andrejs.app.currency.CurrencyService;
 import krilovs.andrejs.app.currency.CurrencyServlet;
 import krilovs.andrejs.app.error.ErrorHandlingFilter;

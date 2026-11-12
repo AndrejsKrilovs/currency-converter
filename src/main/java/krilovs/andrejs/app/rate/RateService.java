@@ -3,7 +3,7 @@ package krilovs.andrejs.app.rate;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import jakarta.persistence.TypedQuery;
-import krilovs.andrejs.app.config.PersistenceConfig;
+import krilovs.andrejs.app.config.jpa.PersistenceConfig;
 import krilovs.andrejs.app.error.NoEntityException;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.persistence.config.QueryHints;
@@ -18,9 +18,9 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 public class RateService {
-    private final static String PIVOT_CURRENCY = "EUR";
-    private final static String UNIQUE_VIOLATION = "23505";
-    private final static int CALCULATED_SCALE = 13;
+    private static final String PIVOT_CURRENCY = "EUR";
+    private static final String UNIQUE_VIOLATION = "23505";
+    private static final int CALCULATED_SCALE = 13;
     private final PersistenceConfig persistence;
 
     public List<RateResponse> findAll() {

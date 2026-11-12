@@ -1,6 +1,6 @@
 package krilovs.andrejs.app.currency;
 
-import krilovs.andrejs.app.config.PersistenceConfig;
+import krilovs.andrejs.app.config.jpa.PersistenceConfig;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.persistence.dynamic.DynamicEntity;
 
