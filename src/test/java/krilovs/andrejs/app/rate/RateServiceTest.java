@@ -134,7 +134,11 @@ class RateServiceTest extends AbstractTestClass {
         var request = new RateRequest("EUR", "TRY", BigDecimal.TEN);
         var exception = assertThrows(NoEntityException.class, () -> service.update(request));
         assertEquals("Exchange rate not found", exception.getMessage());
-        assertEquals("EURTRY", exception.getValue());
+
+        var rate = new RateId();
+        rate.setBaseCurrency("EUR");
+        rate.setTargetCurrency("TRY");
+        assertEquals(rate, exception.getValue());
     }
 
     private void givenRates() {

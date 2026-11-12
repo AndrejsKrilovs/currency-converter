@@ -77,17 +77,24 @@ tasks.test {
   finalizedBy(tasks.jacocoTestReport)
 }
 
+val coverageExcludes = listOf("**/*MapperImpl*", "**/config*", "Main*.class")
+fun withoutCoverageExcludes(classes: FileCollection) = classes.files.map { dir ->
+  fileTree(dir) { exclude(coverageExcludes) }
+}
+
 tasks.jacocoTestReport {
   dependsOn(tasks.test)
   reports {
-    xml.required = true
-    html.required = true
-    html.outputLocation = layout.buildDirectory.dir("jacocoHtml")
+    xml.required.set(true)
+    html.required.set(true)
+    html.outputLocation.set(layout.buildDirectory.dir("jacocoHtml"))
   }
+  classDirectories.setFrom(withoutCoverageExcludes(classDirectories))
 }
 
 tasks.jacocoTestCoverageVerification {
   dependsOn(tasks.jacocoTestReport)
+  classDirectories.setFrom(withoutCoverageExcludes(classDirectories))
 
     violationRules {
       rule {
@@ -97,13 +104,13 @@ tasks.jacocoTestCoverageVerification {
         limit {
           counter = "INSTRUCTION"
           value = "COVEREDRATIO"
-          minimum = BigDecimal.ZERO
+          minimum = BigDecimal.valueOf(0.8)
         }
 
         limit {
           counter = "BRANCH"
           value = "COVEREDRATIO"
-          minimum = BigDecimal.ZERO
+          minimum = BigDecimal.valueOf(0.8)
         }
       }
     }
