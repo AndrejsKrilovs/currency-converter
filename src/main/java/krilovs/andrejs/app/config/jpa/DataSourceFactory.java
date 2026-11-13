@@ -1,13 +1,12 @@
 package krilovs.andrejs.app.config.jpa;
 
-import com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple;
-
 import io.agroal.api.AgroalDataSource;
 import io.agroal.api.configuration.supplier.AgroalDataSourceConfigurationSupplier;
 import io.agroal.api.security.NamePrincipal;
 import io.agroal.api.security.SimplePassword;
 import io.agroal.narayana.NarayanaTransactionIntegration;
 import jakarta.transaction.TransactionManager;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import krilovs.andrejs.app.config.AppConfig;
 import lombok.experimental.UtilityClass;
 import org.postgresql.xa.PGXADataSource;
@@ -18,7 +17,7 @@ import java.sql.SQLException;
 public class DataSourceFactory {
     static AgroalDataSource create(AppConfig.Database db,
                                    TransactionManager tm,
-                                   TransactionSynchronizationRegistryImple registry) {
+                                   TransactionSynchronizationRegistry registry) {
         try {
             return AgroalDataSource.from(new AgroalDataSourceConfigurationSupplier()
                     .connectionPoolConfiguration(pool -> pool

@@ -6,6 +6,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import com.arjuna.ats.jta.TransactionManager;
 import jakarta.transaction.Status;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.UserTransaction;
 import krilovs.andrejs.app.config.AppConfigLoader;
 import krilovs.andrejs.app.config.logging.WideEvent;
@@ -23,6 +24,9 @@ import static com.arjuna.ats.jta.UserTransaction.userTransaction;
 
 @Slf4j
 public class PersistenceConfig implements AutoCloseable {
+    /** EntityManager of the transaction running on this thread, if any. */
+    private static final ThreadLocal<EntityManager> ACTIVE = new ThreadLocal<>();
+
     private final DynamicEntities types;
     private final AgroalDataSource dataSource;
     private final EntityManagerFactory factory;
@@ -33,20 +37,37 @@ public class PersistenceConfig implements AutoCloseable {
         DatabaseMigrator.migrate(config);
 
         var transactionManager = TransactionManager.transactionManager();
-        var registry = new TransactionSynchronizationRegistryImple();
+        TransactionSynchronizationRegistry registry = new TransactionSynchronizationRegistryImple();
         JTATransactionController.setDefaultTransactionManager(transactionManager);
         JTA11TransactionController.setDefaultTransactionSynchronizationRegistry(registry);
 
-        types = DynamicEntities.define(classLoader);
-        dataSource = DataSourceFactory.create(config.database(), transactionManager, registry);
-        factory = PersistenceUnitFactory.create(config, dataSource, classLoader);
-        new JPADynamicHelper(factory).addTypes(false, false, types.all());
+        AgroalDataSource createdDataSource = null;
+        EntityManagerFactory createdFactory = null;
+        try {
+            var createdTypes = DynamicEntities.define(classLoader);
+            createdDataSource = DataSourceFactory.create(config.database(), transactionManager, registry);
+            createdFactory = PersistenceUnitFactory.create(config, createdDataSource, classLoader);
+            new JPADynamicHelper(createdFactory).addTypes(false, false, createdTypes.all());
+
+            types = createdTypes;
+            dataSource = createdDataSource;
+            factory = createdFactory;
+        }
+        catch (RuntimeException | Error e) {
+            var cleanupFailure = closeAll(createdFactory, createdDataSource);
+            if (cleanupFailure != null) {
+                e.addSuppressed(cleanupFailure);
+            }
+            throw e;
+        }
     }
 
     @Override
     public void close() {
-        factory.close();
-        dataSource.close();
+        var failure = closeAll(factory, dataSource);
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     /**
@@ -54,6 +75,12 @@ public class PersistenceConfig implements AutoCloseable {
      * Intended for read-only queries. Do not return lazy streams/entities that need the EntityManager.
      */
     public <T> T withEntityManager(Function<EntityManager, T> work) {
+        var current = ACTIVE.get();
+        if (current != null) {
+            // Called from inside inTransaction(): reuse its EntityManager (same persistence context, sees
+            // uncommitted changes). It is owned and closed by the outer inTransaction(), not by us.
+            return work.apply(current);
+        }
         try (var em = createEntityManager()) {
             return work.apply(em);
         }
@@ -62,13 +89,23 @@ public class PersistenceConfig implements AutoCloseable {
     /**
      * Runs {@code work} in a JTA transaction with a fresh EntityManager.
      * Commits on success, rolls back on any exception.
+     * <p>
+     * Nested calls follow REQUIRED semantics: an inner call joins the outer transaction and reuses its
+     * EntityManager, and commit/rollback is decided by the outermost call. If the inner work throws, the
+     * transaction is marked rollback-only, so the outer commit cannot succeed even if the caller swallows
+     * the exception.
      */
     public <T> T inTransaction(Function<EntityManager, T> work) {
+        var currentTransaction = ACTIVE.get();
+        if (currentTransaction != null) {
+            return joinActiveTransaction(currentTransaction, work);
+        }
         var tx = userTransaction();
         try (var em = createEntityManager()) {
             tx.begin();
             try {
                 em.joinTransaction();
+                ACTIVE.set(em);
                 T result = work.apply(em);
                 tx.commit();
                 return result;
@@ -80,6 +117,9 @@ public class PersistenceConfig implements AutoCloseable {
             catch (Exception originalException) {
                 rollback(tx, originalException);
                 throw new IllegalStateException("Transaction failed", originalException);
+            }
+            finally {
+                ACTIVE.remove();
             }
         }
         catch (RuntimeException | Error e) {
@@ -100,8 +140,53 @@ public class PersistenceConfig implements AutoCloseable {
         return types.get(type).getJavaClass().asSubclass(DynamicEntity.class);
     }
 
+    private static <T> T joinActiveTransaction(EntityManager em, Function<EntityManager, T> work) {
+        try {
+            return work.apply(em);
+        }
+        catch (RuntimeException | Error e) {
+            try {
+                userTransaction().setRollbackOnly();
+            }
+            catch (Exception markException) {
+                e.addSuppressed(markException);
+            }
+            throw e;
+        }
+    }
+
     private EntityManager createEntityManager() {
         return factory.createEntityManager();
+    }
+
+    /**
+     * Closes the factory, then the data source, even if the first close fails. Null resources are skipped.
+     * Returns the first failure with any later ones attached as suppressed, or null if both closed cleanly.
+     */
+    private static RuntimeException closeAll(EntityManagerFactory factory, AgroalDataSource dataSource) {
+        RuntimeException failure = null;
+        if (factory != null) {
+            try {
+                factory.close();
+            }
+            catch (RuntimeException e) {
+                failure = e;
+            }
+        }
+        if (dataSource != null) {
+            try {
+                dataSource.close();
+            }
+            catch (RuntimeException e) {
+                if (failure == null) {
+                    failure = e;
+                }
+                else {
+                    failure.addSuppressed(e);
+                }
+            }
+        }
+        return failure;
     }
 
     private static void rollback(UserTransaction tx, Throwable originalException) {
