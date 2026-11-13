@@ -30,7 +30,7 @@ public class PersistenceConfig implements AutoCloseable {
     public PersistenceConfig() {
         var config = AppConfigLoader.load();
         var classLoader = new DynamicClassLoader(Thread.currentThread().getContextClassLoader());
-        new DatabaseMigrator(config).migrate();
+        DatabaseMigrator.migrate(config);
 
         var transactionManager = TransactionManager.transactionManager();
         var registry = new TransactionSynchronizationRegistryImple();
@@ -73,12 +73,16 @@ public class PersistenceConfig implements AutoCloseable {
                 tx.commit();
                 return result;
             }
-            catch (Exception e) {
-                rollback(tx);
-                throw e;
+            catch (RuntimeException | Error originalException) {
+                rollback(tx, originalException);
+                throw originalException;
+            }
+            catch (Exception originalException) {
+                rollback(tx, originalException);
+                throw new IllegalStateException("Transaction failed", originalException);
             }
         }
-        catch (RuntimeException e) {
+        catch (RuntimeException | Error e) {
             throw e;
         }
         catch (Exception e) {
@@ -100,16 +104,17 @@ public class PersistenceConfig implements AutoCloseable {
         return factory.createEntityManager();
     }
 
-    private static void rollback(UserTransaction tx) {
+    private static void rollback(UserTransaction tx, Throwable originalException) {
         try {
             int status = tx.getStatus();
             if (status == Status.STATUS_ACTIVE || status == Status.STATUS_MARKED_ROLLBACK) {
                 tx.rollback();
             }
         }
-        catch (Exception ignored) {
-            log.error("Failed to rollback JTA transaction", ignored);
-            WideEvent.put("tx_rollback_error", ignored.getMessage());
+        catch (Exception rollbackException) {
+            originalException.addSuppressed(rollbackException);
+            log.error("Failed to rollback JTA transaction", rollbackException);
+            WideEvent.put("tx_rollback_error", rollbackException.getMessage());
         }
     }
 }

@@ -6,20 +6,18 @@ import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
-import lombok.RequiredArgsConstructor;
+import lombok.experimental.UtilityClass;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-@RequiredArgsConstructor
+@UtilityClass
 public class DatabaseMigrator {
-    private final AppConfig config;
-
-    public void migrate() {
-        var db = config.database();
-        try (var connection = DriverManager.getConnection(db.jdbcString(), db.user(), db.password())) {
+    public static void migrate(AppConfig app) {
+        var dbProps = app.database();
+        try (var connection = DriverManager.getConnection(dbProps.jdbcString(), dbProps.user(), dbProps.password())) {
             var database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
-            try (var liquibase = new Liquibase(config.liquibase().changelog(), new ClassLoaderResourceAccessor(), database)) {
+            try (var liquibase = new Liquibase(app.liquibase().changelog(), new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update();
             }
         }
