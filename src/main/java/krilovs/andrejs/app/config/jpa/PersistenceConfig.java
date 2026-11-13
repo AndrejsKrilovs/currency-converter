@@ -8,6 +8,7 @@ import com.arjuna.ats.jta.TransactionManager;
 import jakarta.transaction.Status;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.UserTransaction;
+import krilovs.andrejs.app.config.AppConfig;
 import krilovs.andrejs.app.config.AppConfigLoader;
 import krilovs.andrejs.app.config.logging.WideEvent;
 import krilovs.andrejs.app.util.DynamicEntities;
@@ -32,7 +33,10 @@ public class PersistenceConfig implements AutoCloseable {
     private final EntityManagerFactory factory;
 
     public PersistenceConfig() {
-        var config = AppConfigLoader.load();
+        this(AppConfigLoader.load());
+    }
+
+    public PersistenceConfig(AppConfig config) {
         var classLoader = new DynamicClassLoader(Thread.currentThread().getContextClassLoader());
         DatabaseMigrator.migrate(config);
 

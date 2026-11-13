@@ -1,4 +1,5 @@
 import jakarta.servlet.DispatcherType;
+import krilovs.andrejs.app.config.AppConfigLoader;
 import krilovs.andrejs.app.config.logging.WideEventFilter;
 import krilovs.andrejs.app.config.jpa.PersistenceConfig;
 import krilovs.andrejs.app.currency.CurrencyService;
@@ -42,12 +43,13 @@ void main() throws Exception {
         var exchangeHolder = new ServletHolder(new ExchangeServlet(exchangeService));
         context.addServlet(exchangeHolder, "/exchange");
 
-        var server = new Server(8080);
+        var port = AppConfigLoader.load().server().port();
+        var server = new Server(port);
         server.setHandler(context);
 
         try {
             server.start();
-            log.info("Application started on port 8080, context path /api/v1");
+            log.info("Application started on port {}, context path /api/v1", port);
             server.join();
         }
         finally {

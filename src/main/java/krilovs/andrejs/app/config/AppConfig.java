@@ -1,7 +1,9 @@
 package krilovs.andrejs.app.config;
 
 /** Typed view of application.yaml. */
-public record AppConfig(Database database, Liquibase liquibase) {
+public record AppConfig(Server server, Database database, Liquibase liquibase) {
+    public record Server(int port) {}
+
     public record Database(
             String configName,
             String jdbcString,
