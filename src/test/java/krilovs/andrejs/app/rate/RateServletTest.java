@@ -1,30 +1,27 @@
 package krilovs.andrejs.app.rate;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletResponse;
 import krilovs.andrejs.app.util.AbstractServletTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.Mock;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static krilovs.andrejs.app.util.HttpTestServer.json;
-import static krilovs.andrejs.app.util.JsonWriter.JSON;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Seeded rates: EUR to every other currency (EUR to USD is 1.1224). Tests that write use pairs of their own:
+ * USD/SEK (persist), USD/NOK (duplicate), USD/DKK (database rejects), USD/ZAR (update).
+ */
 class RateServletTest extends AbstractServletTest {
-    @Mock
-    private RateService rateService;
+    private static final int SEEDED_RATES = 29;
 
     @Override
     protected HttpServlet servlet() {
-        return new RateServlet(rateService);
+        return new RateServlet(new RateService(PERSISTENCE));
     }
 
     @Override
@@ -34,80 +31,112 @@ class RateServletTest extends AbstractServletTest {
 
     @Test
     void shouldReturnAllRates() {
-        when(rateService.findAll()).thenReturn(List.of(
-                response("EUR", "USD", new BigDecimal("1.1224")),
-                response("EUR", "PLN", new BigDecimal("4.389"))
-        ));
-
         var response = server.get("/exchangeRates");
         assertEquals(HttpServletResponse.SC_OK, response.statusCode());
-        assertEquals(2, json(response).size());
+        assertTrue(json(response).size() >= SEEDED_RATES);
     }
 
-    @Test
-    void shouldReturnRateByPair() {
-        when(rateService.findByPair("EUR", "USD")).thenReturn(
-                Optional.of(response("EUR", "USD", new BigDecimal("1.1224")))
-        );
-
-        var response = server.get("/exchangeRate/eurusd");
+    @ParameterizedTest
+    @ValueSource(strings = {"eurusd", "EURUSD"})
+    void shouldReturnRateByPair(String pair) {
+        var response = server.get("/exchangeRate/" + pair);
         assertEquals(HttpServletResponse.SC_OK, response.statusCode());
         assertEquals("EUR", json(response).get("baseCurrency").get("code").asText());
         assertEquals("USD", json(response).get("targetCurrency").get("code").asText());
-        assertEquals("1.1224", json(response).get("rate").asText());
+        assertDecimal("1.1224", json(response).get("rate"));
     }
 
-    @Test
-    void shouldReturnBadRequestWhenPairHasIncorrectFormat() {
-        assertError(
-                server.get("/exchangeRate/EUR"),
-                HttpServletResponse.SC_BAD_REQUEST,
-                "Incorrect currency pair, e.g. USDEUR"
-        );
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "/exchangeRate/EUR | Incorrect currency pair, e.g. USDEUR",
+            "/exchangeRate/EURUSDX | Incorrect currency pair, e.g. USDEUR",
+            "/exchangeRate/EUR123 | Incorrect currency pair, e.g. USDEUR",
+            "/exchangeRate | Missing currency pair",
+            "/exchangeRate/ | Missing currency pair"
+    })
+    void shouldReturnBadRequestWhenPairIsMissingOrIncorrect(String path, String message) {
+        assertError(server.get(path), HttpServletResponse.SC_BAD_REQUEST, message);
     }
 
     @Test
     void shouldNotFindRatePair() {
-        when(rateService.findByPair("EUR", "TRY")).thenReturn(Optional.empty());
-
-        var response = server.get("/exchangeRate/EURTRY");
-        assertEquals(HttpServletResponse.SC_NOT_FOUND, response.statusCode());
-        assertEquals("Exchange pair not found", json(response).get("message").asText());
-        assertEquals(List.of("EUR", "TRY"), JSON.convertValue(json(response).get("value"), new TypeReference<List<String>>() {}));
+        var value = assertNotFound(server.get("/exchangeRate/EURXYZ"), "Exchange pair not found");
+        assertEquals("EUR", value.get(0).asText());
+        assertEquals("XYZ", value.get(1).asText());
     }
 
     @Test
     void shouldPersistNewRate() {
-        var request = new RateRequest("BYN", "EUR", new BigDecimal("2.9"));
-        when(rateService.persist(request)).thenReturn(response("BYN", "EUR", new BigDecimal("2.9")));
+        var created = server.post("/exchangeRates", """
+                {"baseCurrencyCode": "USD", "targetCurrencyCode": "SEK", "rate": 9.5}""");
+        assertEquals(HttpServletResponse.SC_CREATED, created.statusCode());
+        assertDecimal("9.5", json(created).get("rate"));
 
-        var response = server.post("/exchangeRates", """
-                {"baseCurrencyCode": "BYN", "targetCurrencyCode": "EUR", "rate": 2.9}""");
-        assertEquals(HttpServletResponse.SC_CREATED, response.statusCode());
-        assertEquals("2.9", json(response).get("rate").asText());
+        var loaded = server.get("/exchangeRate/usdsek");
+        assertEquals(HttpServletResponse.SC_OK, loaded.statusCode());
+        assertDecimal("9.5", json(loaded).get("rate"));
     }
 
     @Test
-    void shouldNotPersistRateWhenBaseCurrencyIsMissing() {
-        assertValidationError(
-                server.post("/exchangeRates", "{\"targetCurrencyCode\": \"EUR\", \"rate\": 1.2}"),
-                "baseCurrencyCode",
-                "Base currency code should be defined"
+    void shouldNotPersistDuplicateRate() {
+        var body = """
+                {"baseCurrencyCode": "USD", "targetCurrencyCode": "NOK", "rate": 10.4}""";
+        assertEquals(HttpServletResponse.SC_CREATED, server.post("/exchangeRates", body).statusCode());
+
+        var value = assertNotFound(server.post("/exchangeRates", body), "Rate already exists");
+        assertEquals("USD", value.get("baseCurrency").asText());
+        assertEquals("NOK", value.get("targetCurrency").asText());
+    }
+
+    @Test
+    void shouldNotPersistRateOfUnknownCurrency() {
+        var value = assertNotFound(
+                server.post("/exchangeRates", "{\"baseCurrencyCode\": \"XXX\", \"targetCurrencyCode\": \"EUR\", \"rate\": 1}"),
+                "Currency not found for rate pair"
         );
+
+        assertEquals("XXX", value.get("baseCurrencyCode").asText());
+    }
+
+    @Test
+    void shouldReturnConflictWhenDatabaseRejectsRate() {
+        var response = server.post("/exchangeRates", """
+                {"baseCurrencyCode": "USD", "targetCurrencyCode": "DKK", "rate": 10000000000000}""");
+
+        assertEquals(HttpServletResponse.SC_CONFLICT, response.statusCode());
+        assertTrue(json(response).get("detail").asText().contains("precision 19, scale 6"));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "{\"targetCurrencyCode\": \"EUR\", \"rate\": 1.2} | baseCurrencyCode | Base currency code should be defined",
+            "{\"baseCurrencyCode\": \"USD\", \"targetCurrencyCode\": \"USD\", \"rate\": 1} | currenciesDifferent | Base currency must differ from target currency",
+            "{\"baseCurrencyCode\": \"USD\", \"targetCurrencyCode\": \"EUR\", \"rate\": -1} | rate | Rate must be a positive number"
+    })
+    void shouldNotPersistInvalidRate(String body, String field, String message) {
+        assertValidationError(server.post("/exchangeRates", body), field, message);
     }
 
     @Test
     void shouldUpdateRate() {
-        var request = new RateRequest("EUR", "USD", new BigDecimal("1.2"));
-        when(rateService.update(request)).thenReturn(response("EUR", "USD", new BigDecimal("1.2")));
+        server.post("/exchangeRates", """
+                {"baseCurrencyCode": "USD", "targetCurrencyCode": "ZAR", "rate": 18}""");
 
-        var response = server.patch("/exchangeRate/eurusd", "{\"rate\": 1.2}");
-        assertEquals(HttpServletResponse.SC_ACCEPTED, response.statusCode());
-        assertEquals("1.2", json(response).get("rate").asText());
+        var updated = server.patch("/exchangeRate/usdzar", "{\"rate\": 19.5}");
+        assertEquals(HttpServletResponse.SC_ACCEPTED, updated.statusCode());
+        assertDecimal("19.5", json(updated).get("rate"));
+        assertDecimal("19.5", json(server.get("/exchangeRate/usdzar")).get("rate"));
     }
 
     @Test
-    void shouldNotUpdateRate() {
+    void shouldNotUpdateMissingRate() {
+        var value = assertNotFound(server.patch("/exchangeRate/nokdkk", "{\"rate\": 1.2}"), "Exchange rate not found");
+        assertEquals("NOK", value.get("baseCurrency").asText());
+        assertEquals("DKK", value.get("targetCurrency").asText());
+    }
+
+    @Test
+    void shouldNotUpdateRateWhenCurrenciesAreTheSame() {
         assertValidationError(
                 server.patch("/exchangeRate/usdusd", "{\"rate\": 1}"),
                 "currenciesDifferent",

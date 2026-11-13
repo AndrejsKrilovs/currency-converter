@@ -1,37 +1,27 @@
 package krilovs.andrejs.app.currency;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import jakarta.persistence.PersistenceException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletResponse;
 import krilovs.andrejs.app.util.AbstractServletTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Mock;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Stream;
 
 import static krilovs.andrejs.app.util.HttpTestServer.json;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CurrencyServletTest extends AbstractServletTest {
-    private static final String PLN = """
-            {"code": "PLN", "name": "Polish Zloty", "symbol": "zl"}""";
-
-    @Mock
-    private CurrencyService currencyService;
-
     @Override
     protected HttpServlet servlet() {
-        return new CurrencyServlet(currencyService);
+        return new CurrencyServlet(new CurrencyService(PERSISTENCE));
     }
 
     @Override
@@ -41,56 +31,55 @@ class CurrencyServletTest extends AbstractServletTest {
 
     @Test
     void shouldReturnAllCurrencies() {
-        when(currencyService.findAll()).thenReturn(List.of(
-                currency("EUR", "Euro", "€"),
-                currency("USD", "US Dollar", "$")
-        ));
-
         var response = server.get("/currencies");
         assertEquals(HttpServletResponse.SC_OK, response.statusCode());
-        assertEquals(2, json(response).size());
+        assertTrue(json(response).findValuesAsText("code").containsAll(List.of("EUR", "USD", "PLN")));
     }
 
-    @Test
-    void shouldReturnCurrencyByCode() {
-        when(currencyService.findById(anyString())).thenReturn(Optional.of(currency("EUR", "Euro", "€")));
-
-        var response = server.get("/currency/eur");
+    @ParameterizedTest
+    @ValueSource(strings = {"eur", "EUR"})
+    void shouldReturnCurrencyByCode(String code) {
+        var response = server.get("/currency/" + code);
         assertEquals(HttpServletResponse.SC_OK, response.statusCode());
         assertCurrency(json(response), "EUR", "Euro", "€");
     }
 
     @Test
     void shouldReturnNotFoundWhenCurrencyDoesNotExist() {
-        when(currencyService.findById(anyString())).thenReturn(Optional.empty());
-
-        var response = server.get("/currency/xxx");
-        assertEquals(HttpServletResponse.SC_NOT_FOUND, response.statusCode());
-        assertEquals("Currency code not found", json(response).get("message").asText());
-        assertEquals("XXX", json(response).get("value").asText());
+        var value = assertNotFound(server.get("/currency/xxx"), "Currency code not found");
+        assertEquals("XXX", value.asText());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"/currency", "/currency/", "/currency/%20"})
     void shouldReturnBadRequestWhenCurrencyCodeIsMissing(String path) {
         assertError(server.get(path), HttpServletResponse.SC_BAD_REQUEST, "Missing currency code");
-        verify(currencyService, never()).findById(any());
     }
 
     @Test
     void shouldPersistNewCurrency() {
-        when(currencyService.persist(any())).thenReturn(currency("PLN", "Polish Zloty", "zl"));
+        var created = server.post("/currencies", """
+                {"code": "XPC", "name": "Persisted", "symbol": "xp"}""");
+        assertEquals(HttpServletResponse.SC_CREATED, created.statusCode());
+        assertCurrency(json(created), "XPC", "Persisted", "xp");
 
-        var response = server.post("/currencies", PLN);
-        assertEquals(HttpServletResponse.SC_CREATED, response.statusCode());
-        assertCurrency(json(response), "PLN", "Polish Zloty", "zl");
+        var loaded = server.get("/currency/xpc");
+        assertEquals(HttpServletResponse.SC_OK, loaded.statusCode());
+        assertCurrency(json(loaded), "XPC", "Persisted", "xp");
     }
 
-    @Test
-    void shouldNotPersistCurrency() {
-        when(currencyService.persist(any())).thenThrow(new PersistenceException());
+    @ParameterizedTest
+    @MethodSource("rejectedByDatabase")
+    void shouldReturnConflictWhenDatabaseRejectsCurrency(String body, String detail) {
+        var response = server.post("/currencies", body);
 
-        assertEquals(HttpServletResponse.SC_CONFLICT, server.post("/currencies", PLN).statusCode());
+        assertEquals(HttpServletResponse.SC_CONFLICT, response.statusCode());
+        if (detail == null) {
+            assertTrue(json(response).isEmpty());
+        }
+        else {
+            assertEquals(detail, json(response).get("detail").asText());
+        }
     }
 
     @Test
@@ -102,6 +91,17 @@ class CurrencyServletTest extends AbstractServletTest {
     @CsvSource(value = {"GET,", "POST,{}"})
     void shouldReturnIncorrectEndpointWhenPathIsUnsupported(String method, String body) {
         assertIncorrectEndpoint(method, body);
+    }
+
+    static Stream<Arguments> rejectedByDatabase() {
+        return Stream.of(
+                // unique violation: PostgreSQL explains it in its Detail
+                Arguments.of("""
+                        {"code": "EUR", "name": "Euro again", "symbol": "€"}""", "Key (code)=(EUR) already exists"),
+                // value too long: PostgreSQL gives no Detail, so the client gets an empty error
+                Arguments.of("""
+                        {"code": "XTL", "name": "Too long symbol", "symbol": "ABCD"}""", null)
+        );
     }
 
     private static void assertCurrency(JsonNode json, String code, String name, String symbol) {

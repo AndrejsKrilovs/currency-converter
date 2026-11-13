@@ -92,6 +92,8 @@ dependencies {
 tasks.test {
   useJUnitPlatform()
   jvmArgs("-javaagent:${mockitoAgent.asPath}")
+  // application.yaml has no default for the password; AppConfigLoaderTest loads it with the real environment
+  environment("DB_PASSWORD", "test-password")
   finalizedBy(tasks.jacocoTestReport)
 }
 
@@ -122,13 +124,13 @@ tasks.jacocoTestCoverageVerification {
         limit {
           counter = "INSTRUCTION"
           value = "COVEREDRATIO"
-          minimum = BigDecimal.ZERO
+          minimum = BigDecimal.valueOf(0.8)
         }
 
         limit {
           counter = "BRANCH"
           value = "COVEREDRATIO"
-          minimum = BigDecimal.ZERO
+          minimum = BigDecimal.valueOf(0.8)
         }
       }
     }

@@ -45,7 +45,7 @@ public final class AppConfigLoader {
         }
     }
 
-    private static JsonNode resolve(JsonNode node, UnaryOperator<String> env) {
+    static JsonNode resolve(JsonNode node, UnaryOperator<String> env) {
         if (node instanceof ObjectNode object) {
             object.properties().forEach(entry -> entry.setValue(resolve(entry.getValue(), env)));
         }

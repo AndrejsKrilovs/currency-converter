@@ -21,7 +21,7 @@ import static krilovs.andrejs.app.util.JsonWriter.JSON;
 
 /**
  * Real Jetty on a random port with the same context path and error filter as Main, serving one servlet
- * over real HTTP. Services behind the servlet are mocks, so no database is needed.
+ * over real HTTP. What stands behind the servlet (mocks or real services) is up to the caller.
  */
 public final class HttpTestServer implements AutoCloseable {
     private static final String CONTEXT_PATH = "/api/v1";

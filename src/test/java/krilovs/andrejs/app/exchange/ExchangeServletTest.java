@@ -2,25 +2,20 @@ package krilovs.andrejs.app.exchange;
 
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletResponse;
+import krilovs.andrejs.app.rate.RateService;
 import krilovs.andrejs.app.util.AbstractServletTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Mock;
-
-import java.math.BigDecimal;
 
 import static krilovs.andrejs.app.util.HttpTestServer.json;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.when;
 
+/** Seeded rate used here: EUR to USD is 1.1224. */
 class ExchangeServletTest extends AbstractServletTest {
-    @Mock
-    private ExchangeService exchangeService;
-
     @Override
     protected HttpServlet servlet() {
-        return new ExchangeServlet(exchangeService);
+        return new ExchangeServlet(new ExchangeService(new RateService(PERSISTENCE)));
     }
 
     @Override
@@ -30,19 +25,22 @@ class ExchangeServletTest extends AbstractServletTest {
 
     @Test
     void shouldConvertAmount() {
-        var request = new ExchangeRequest("EUR", "USD", new BigDecimal("100"));
-        when(exchangeService.convert(request)).thenReturn(new ExchangeResponse(
-                currency("EUR"), currency("USD"),
-                new BigDecimal("1.12"), new BigDecimal("100"), new BigDecimal("112")
-        ));
-
         var response = server.get("/exchange?from=eur&to=usd&amount=100");
+
         assertEquals(HttpServletResponse.SC_OK, response.statusCode());
         assertEquals("EUR", json(response).get("baseCurrency").get("code").asText());
         assertEquals("USD", json(response).get("targetCurrency").get("code").asText());
-        assertEquals("1.12", json(response).get("rate").asText());
-        assertEquals("100", json(response).get("amount").asText());
-        assertEquals("112", json(response).get("convertedAmount").asText());
+        assertEquals("1.1224", json(response).get("rate").asText());
+        assertEquals("100.0", json(response).get("amount").asText());
+        assertEquals("112.24", json(response).get("convertedAmount").asText());
+    }
+
+    @Test
+    void shouldNotConvertUnknownPair() {
+        var value = assertNotFound(server.get("/exchange?from=eur&to=xyz&amount=1"), "Exchange pair not found");
+
+        assertEquals("EUR", value.get(0).asText());
+        assertEquals("XYZ", value.get(1).asText());
     }
 
     @Test

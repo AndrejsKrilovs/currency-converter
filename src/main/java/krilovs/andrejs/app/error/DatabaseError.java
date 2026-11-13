@@ -40,7 +40,7 @@ public record DatabaseError(String detail, String sql, List<String> bind, String
     /** Message of the innermost cause, e.g. PostgreSQL's "ERROR: syntax error at or near ...", for failures without a Detail. */
     private static String rootMessage(Throwable error) {
         var root = error;
-        while (root.getCause() != null && root.getCause() != root) {
+        while (root.getCause() != null) {
             root = root.getCause();
         }
         return root.getMessage();

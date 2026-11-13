@@ -1,0 +1,10 @@
+server:
+  port: "${PORT:8080}"
+database:
+  config_name: test
+  jdbc_string: "jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME}"
+  user: "${DB_USER:user}"
+  password: "${DB_PASSWORD}"
+  max_connection_pool_size: 5
+liquibase:
+  changelog: changelog.yaml
