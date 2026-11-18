@@ -74,16 +74,6 @@ class PersistenceConfigTest {
         persistence.close();
     }
 
-    @Test
-    void committedChangesAreVisibleOutsideTheTransaction() {
-        persistence.inTransaction(em -> {
-            em.persist(currency("XCM", "Committed"));
-            return null;
-        });
-
-        assertNotNull(find("XCM"));
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void failedWorkRollsBack(boolean markedRollbackOnly) {

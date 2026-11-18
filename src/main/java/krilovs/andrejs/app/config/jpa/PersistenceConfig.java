@@ -25,12 +25,13 @@ import static com.arjuna.ats.jta.UserTransaction.userTransaction;
 
 @Slf4j
 public class PersistenceConfig implements AutoCloseable {
-    /** EntityManager of the transaction running on this thread, if any. */
-    private static final ThreadLocal<EntityManager> ACTIVE = new ThreadLocal<>();
+    /** Key of the transaction-bound EntityManager in the {@link TransactionSynchronizationRegistry}. */
+    private static final String ENTITY_MANAGER_KEY = PersistenceConfig.class.getName() + ".entityManager";
 
     private final DynamicEntities types;
     private final AgroalDataSource dataSource;
     private final EntityManagerFactory factory;
+    private final TransactionSynchronizationRegistry registry;
 
     public PersistenceConfig() {
         this(AppConfigLoader.load());
@@ -41,18 +42,19 @@ public class PersistenceConfig implements AutoCloseable {
         DatabaseMigrator.migrate(config);
 
         var transactionManager = TransactionManager.transactionManager();
-        TransactionSynchronizationRegistry registry = new TransactionSynchronizationRegistryImple();
+        var createdRegistry = new TransactionSynchronizationRegistryImple();
         JTATransactionController.setDefaultTransactionManager(transactionManager);
-        JTA11TransactionController.setDefaultTransactionSynchronizationRegistry(registry);
+        JTA11TransactionController.setDefaultTransactionSynchronizationRegistry(createdRegistry);
 
         AgroalDataSource createdDataSource = null;
         EntityManagerFactory createdFactory = null;
         try {
             var createdTypes = DynamicEntities.define(classLoader);
-            createdDataSource = DataSourceFactory.create(config.database(), transactionManager, registry);
+            createdDataSource = DataSourceFactory.create(config.database(), transactionManager, createdRegistry);
             createdFactory = PersistenceUnitFactory.create(config, createdDataSource, classLoader);
             new JPADynamicHelper(createdFactory).addTypes(false, false, createdTypes.all());
 
+            registry = createdRegistry;
             types = createdTypes;
             dataSource = createdDataSource;
             factory = createdFactory;
@@ -79,7 +81,7 @@ public class PersistenceConfig implements AutoCloseable {
      * Intended for read-only queries. Do not return lazy streams/entities that need the EntityManager.
      */
     public <T> T withEntityManager(Function<EntityManager, T> work) {
-        var current = ACTIVE.get();
+        var current = transactionEntityManager();
         if (current != null) {
             // Called from inside inTransaction(): reuse its EntityManager (same persistence context, sees
             // uncommitted changes). It is owned and closed by the outer inTransaction(), not by us.
@@ -100,16 +102,16 @@ public class PersistenceConfig implements AutoCloseable {
      * the exception.
      */
     public <T> T inTransaction(Function<EntityManager, T> work) {
-        var currentTransaction = ACTIVE.get();
-        if (currentTransaction != null) {
-            return joinActiveTransaction(currentTransaction, work);
+        var current = transactionEntityManager();
+        if (current != null) {
+            return joinActiveTransaction(current, work);
         }
         var tx = userTransaction();
         try (var em = createEntityManager()) {
             tx.begin();
             try {
                 em.joinTransaction();
-                ACTIVE.set(em);
+                registry.putResource(ENTITY_MANAGER_KEY, em);
                 T result = work.apply(em);
                 tx.commit();
                 return result;
@@ -121,9 +123,6 @@ public class PersistenceConfig implements AutoCloseable {
             catch (Exception originalException) {
                 rollback(tx, originalException);
                 throw new IllegalStateException("Transaction failed", originalException);
-            }
-            finally {
-                ACTIVE.remove();
             }
         }
         catch (RuntimeException | Error e) {
@@ -144,13 +143,21 @@ public class PersistenceConfig implements AutoCloseable {
         return types.get(type).getJavaClass().asSubclass(DynamicEntity.class);
     }
 
-    private static <T> T joinActiveTransaction(EntityManager em, Function<EntityManager, T> work) {
+    /** EntityManager bound to the running transaction by the outermost inTransaction(), or null if none. */
+    private EntityManager transactionEntityManager() {
+        if (registry.getTransactionStatus() == Status.STATUS_NO_TRANSACTION) {
+            return null;
+        }
+        return (EntityManager) registry.getResource(ENTITY_MANAGER_KEY);
+    }
+
+    private <T> T joinActiveTransaction(EntityManager em, Function<EntityManager, T> work) {
         try {
             return work.apply(em);
         }
         catch (RuntimeException | Error e) {
             try {
-                userTransaction().setRollbackOnly();
+                registry.setRollbackOnly();
             }
             catch (Exception markException) {
                 e.addSuppressed(markException);
