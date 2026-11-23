@@ -1,6 +1,7 @@
 plugins {
   id("java")
   id("jacoco")
+  id("application")
 }
 
 group = "krilovs.andrejs.app"
@@ -52,7 +53,7 @@ dependencies {
   implementation("io.agroal:agroal-narayana:$agroalVersion")
 
   // Logging
-  implementation("ch.qos.logback:logback-classic:1.6.5")
+  implementation("ch.qos.logback:logback-classic:1.6.8")
 
   // Lombok
   compileOnly(lombokString)
@@ -86,6 +87,27 @@ dependencies {
     testImplementation("commons-codec:commons-codec:1.23.0") {
       because("CVE-2026-119078: Fix Blake3 KDF vulnerability flagged by JetBrains")
     }
+  }
+}
+
+application {
+  mainClass.set("Main")
+}
+
+// Runnable thin jar
+val copyRuntimeLibs by tasks.registering(Copy::class) {
+  description = "Dependencies are copied next to it into build/libs/lib and referenced via Class-Path"
+  from(configurations.runtimeClasspath)
+  into(layout.buildDirectory.dir("libs/lib"))
+}
+
+tasks.jar {
+  dependsOn(copyRuntimeLibs)
+  manifest {
+    attributes(
+      "Main-Class" to "Main",
+      "Class-Path" to provider { configurations.runtimeClasspath.get().files.joinToString(" ") { "lib/${it.name}" } }
+    )
   }
 }
 

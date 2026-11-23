@@ -197,7 +197,7 @@ curl -X PATCH http://localhost:8080/api/v1/exchangeRate/EURPLN \
 
 ### Требования
 
-- JDK 25
+- JDK 25 (`JAVA_HOME` должен указывать на него)
 - Docker (для PostgreSQL и для интеграционных тестов)
 
 ### 1. База данных
@@ -212,7 +212,24 @@ docker compose up -d
 
 ### 2. Приложение
 
-Класс `Main` — точка входа (`src/main/java/krilovs/andrejs/app/Main.java`). Плагин `application` в Gradle не подключён, поэтому задачи `./gradlew run` нет — запускайте `Main` из IDE (IntelliJ IDEA), указав переменную окружения `DB_PASSWORD`.
+Класс `Main` — точка входа (`src/main/java/krilovs/andrejs/app/Main.java`).
+
+**Через Gradle:**
+
+```bash
+./gradlew clean run
+```
+
+**Через jar:**
+
+```bash
+./gradlew clean jar
+java -jar build/libs/currency-converter-1.0-SNAPSHOT.jar
+```
+
+Jar «тонкий»: зависимости копируются в `build/libs/lib/` и подключаются через `Class-Path` в манифесте, поэтому jar нужно запускать вместе с папкой `lib` (и переносить их только вместе).
+
+Можно также запустить `Main` из IDE, указав переменную окружения `DB_PASSWORD`.
 
 При старте приложение:
 1. применяет миграции Liquibase (создаёт таблицы и загружает начальные валюты и курсы);
